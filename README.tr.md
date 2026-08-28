@@ -393,10 +393,72 @@ Kubernetes yalnızca yeni TCP bağlantılarını pod'lara dağıtır. Açılmı�
 - Veri yapıları: enum, array, `byte[]`, `List`, `Set`, `Collection`, `Map`, iç içe record ve uyumlu Java bean.
 - DTO için record en sade seçimdir. Bean kullanılırsa okunabilir property'ler ile uyumlu bir builder veya boş constructor ve yazılabilir property'ler gerekir.
 - Senkron dönüş, `void` ve `CompletableFuture<T>` desteklenir.
-- `@DubboReference` için `interfaceClass`, `interfaceName`, `group`, `version` ve `check` desteklenir.
-- `@DubboService` için `interfaceClass`, `interfaceName`, `group`, `version`, `export`, `async`, `executes` ve `executor` desteklenir.
-- Desteklenmeyen annotation alanları sessizce yok sayılmaz. Build hata verir.
 - Decode sırasında collection ve payload limitleri kontrol edilir. Bu limitleri geçerli iş verisine yakın tutun.
+
+### `@DubboService` Parametreleri
+
+| Parametre | Varsayılan | Anlamı ve önerilen kullanım |
+|---|---:|---|
+| `interfaceClass` | `void.class` | Tip güvenli servis kontratıdır. Yeni kodda, özellikle implementasyon birden fazla interface içeriyorsa `interfaceClass = StoreQueryService.class` kullanımını tercih edin. |
+| `interfaceName` | Boş | Contract interface'inin tam package adını metin olarak alır. Yalnızca kaynak uyumluluğu string gerektiriyorsa kullanın. Yeni kodda `interfaceClass` tercih edin ve ikisini birlikte vermeyin. |
+| `group` | Boş | Aynı interface'i kullanan servisleri ayıran mantıksal alandır. Consumer değeri bire bir aynı olmalıdır. |
+| `version` | Boş | Servis kimliğine katılan contract sürümüdür. Consumer değeri bire bir aynı olmalıdır. Geriye uyumsuz contract değişikliğinde yeni sürüm kullanın. |
+| `export` | `true` | Generated dispatcher'ı native provider'a kaydeder. `false` olduğunda Spring implementasyon bean'ini oluşturabilir ancak servis Dubbo üzerinden çağrılamaz. |
+| `executor` | Boş | Sınırlı concurrency hattına isim verir. Aynı ismi kullanan tüm metot ve servisler aktif çağrı limitini ortak kullanır. Boş isim global varsayılan hattı kullanır. |
+| `executes` | `-1` | Pozitif değer concurrency limitini koda sabitler ve property değerinin önüne geçer. Ortama göre build almadan tuning yapabilmek için `executor` ve property kullanımını tercih edin. |
+| `async` | `false` | Kaynak uyumluluğu için kabul edilir. Gerçek non-blocking çalışma, metodun `CompletableFuture<T>` döndürmesiyle belirlenir. `async = true`, bloklayan bir metodu kendiliğinden asenkron yapmaz. |
+
+Provider servis kimliği; interface tam adı, `group` ve `version` değerlerinin birleşimidir. Consumer ve provider bu üç değeri aynı kullanmalıdır.
+
+`interfaceClass` ve `interfaceName` verilmezse implementasyon tam olarak bir interface'i implement etmelidir. Production kodunda açık `interfaceClass` kullanımı daha anlaşılır ve güvenlidir.
+
+İsimlendirilmiş concurrency örneği:
+
+```java
+@DubboService(
+    interfaceClass = StoreQueryService.class,
+    group = "store",
+    version = "1.0",
+    executor = "store-query")
+public final class StoreQueryServiceImpl implements StoreQueryService {
+    // İş mantığı Java'da kalır.
+}
+```
+
+```properties
+reactor.dubbo.provider.executors.store-query.max-concurrent=16
+```
+
+Bu değer, `store-query` hattını kullanan bütün metotların toplam aktif çağrı sayısını sınırlar. Her metot için ayrı ayrı 16 thread oluşturmaz. Global `reactor.dubbo.provider.business-workers` sınırı da uygulanmaya devam eder. Aynı executor adı farklı `executes` değerleriyle kullanılırsa provider başlangıcı reddedilir.
+
+Concurrency öncelik sırası nettir:
+
+1. `N > 0` olduğunda `@DubboService(executes = N)`.
+2. İsimlendirilmiş executor için `reactor.dubbo.provider.executors.<executor>.max-concurrent`.
+3. İsimlendirilmiş değer yoksa `reactor.dubbo.provider.default-max-concurrent`.
+
+### `@DubboReference` Parametreleri
+
+| Parametre | Varsayılan | Anlamı ve önerilen kullanım |
+|---|---:|---|
+| `interfaceClass`, `interfaceName` | Field tipinden bulunur | İsteğe bağlı contract doğrulamasıdır. Annotation eklenen field zaten servis interface'i tipinde olmalıdır. |
+| `group`, `version` | Boş | Provider servis kimliği ile bire bir aynı olmalıdır. |
+| `check` | `true` | Bu reference'ı başlangıç readiness kontrolüne dahil eder. Yalnızca provider başlangıçta bilinçli olarak opsiyonelse `false` yapın. Retry açmaz. |
+
+### Desteklenmeyen Annotation Parametreleri
+
+Desteklenmeyen değerler sessizce yok sayılmaz. Açıkça kullanılırsa build hata verir.
+
+| Parametre | Yerine kullanılacak ayar |
+|---|---|
+| `timeout` | `reactor.dubbo.consumer.timeout-ms` veya `reactor.dubbo.provider.request-timeout-ms` |
+| `connections` | `reactor.dubbo.consumer.connections-per-endpoint` |
+| `payload` | Consumer/provider `max-payload-bytes` property'leri |
+| `retries` | Yalnızca idempotent işlemler için uygulama seviyesinde açık retry; native çağrı otomatik tekrarlanmaz |
+| `registry` | Statik adres veya Kubernetes Service DNS ile `reactor.dubbo.consumer.providers` |
+| `serialization` | Native protokol desteklenen Hessian2 alt kümesini kullanır |
+| `protocol` | Native veri düzlemi klasik `dubbo://` kullanır |
+| `path`, `actives`, `cluster`, `loadbalance` | Sınırları belli native runtime içinde annotation karşılığı yoktur |
 
 ## Hata ve Kapasite Modeli
 

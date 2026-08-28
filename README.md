@@ -393,10 +393,72 @@ Kubernetes balances new TCP connections. Existing persistent connections remain 
 - Supported structures: enums, arrays, `byte[]`, `List`, `Set`, `Collection`, `Map`, nested records, and compatible Java beans.
 - Records are the simplest DTO choice. A bean must have readable properties and either a compatible builder or a no-argument constructor with writable properties.
 - Synchronous return values, `void`, and `CompletableFuture<T>` are supported.
-- `@DubboReference` supports `interfaceClass`, `interfaceName`, `group`, `version`, and `check`.
-- `@DubboService` supports `interfaceClass`, `interfaceName`, `group`, `version`, `export`, `async`, `executes`, and `executor`.
-- Unsupported annotation options fail the build instead of being silently ignored.
 - Collection and payload limits are checked while decoding. Keep both limits close to valid business sizes.
+
+### `@DubboService` Parameters
+
+| Parameter | Default | Meaning and recommended use |
+|---|---:|---|
+| `interfaceClass` | `void.class` | Type-safe service contract. Prefer `interfaceClass = StoreQueryService.class` in new code, especially when the implementation has multiple interfaces. |
+| `interfaceName` | Empty | Fully qualified contract name as text. Use it only when source compatibility requires a string. Prefer `interfaceClass`; do not set both. |
+| `group` | Empty | Logical namespace for services that share the same interface. The consumer value must match exactly. |
+| `version` | Empty | Contract version used in service identity. The consumer value must match exactly. Deploy a new version when a contract change is not backward compatible. |
+| `export` | `true` | Registers the generated dispatcher with the native provider. With `false`, Spring can still create the implementation bean, but the service is not reachable over Dubbo. |
+| `executor` | Empty | Names a bounded concurrency lane. All methods and services using the same name share that lane's active-call limit. An empty name uses the global default lane. |
+| `executes` | `-1` | Positive value hard-codes the lane limit and overrides configuration. Prefer `executor` plus a property so each environment can be tuned without rebuilding. |
+| `async` | `false` | Accepted for source compatibility. Real non-blocking dispatch is determined by a `CompletableFuture<T>` method return type; `async = true` does not make a blocking method asynchronous. |
+
+The provider service identity is the combination of interface name, `group`, and `version`. Consumer and provider must use the same three values.
+
+If neither `interfaceClass` nor `interfaceName` is set, the implementation must implement exactly one interface. Explicit `interfaceClass` is clearer and safer for production code.
+
+Named concurrency example:
+
+```java
+@DubboService(
+    interfaceClass = StoreQueryService.class,
+    group = "store",
+    version = "1.0",
+    executor = "store-query")
+public final class StoreQueryServiceImpl implements StoreQueryService {
+    // Business code stays in Java.
+}
+```
+
+```properties
+reactor.dubbo.provider.executors.store-query.max-concurrent=16
+```
+
+The value above limits the total active calls across every method sharing `store-query`; it does not create 16 threads per method. The global `reactor.dubbo.provider.business-workers` limit still applies. Reusing one executor name with conflicting `executes` values is rejected during provider startup.
+
+Concurrency precedence is explicit:
+
+1. `@DubboService(executes = N)` when `N > 0`.
+2. `reactor.dubbo.provider.executors.<executor>.max-concurrent` for a named executor.
+3. `reactor.dubbo.provider.default-max-concurrent` when no named value exists.
+
+### `@DubboReference` Parameters
+
+| Parameter | Default | Meaning and recommended use |
+|---|---:|---|
+| `interfaceClass`, `interfaceName` | Inferred from field | Optional contract validation. The annotated field must already be typed as the service interface. |
+| `group`, `version` | Empty | Must match the provider identity exactly. |
+| `check` | `true` | Includes this reference in startup readiness. Set `false` only when that provider is intentionally optional during startup. It does not enable retries. |
+
+### Unsupported Annotation Parameters
+
+Unsupported values are not silently ignored. Explicit use fails the build.
+
+| Parameter | Use instead |
+|---|---|
+| `timeout` | `reactor.dubbo.consumer.timeout-ms` or `reactor.dubbo.provider.request-timeout-ms` |
+| `connections` | `reactor.dubbo.consumer.connections-per-endpoint` |
+| `payload` | Consumer/provider `max-payload-bytes` properties |
+| `retries` | Explicit application retry for idempotent operations only; native calls are not replayed automatically |
+| `registry` | `reactor.dubbo.consumer.providers` with a static address or Kubernetes Service DNS |
+| `serialization` | The native protocol uses the supported Hessian2 subset |
+| `protocol` | The native data plane uses classic `dubbo://` |
+| `path`, `actives`, `cluster`, `loadbalance` | No annotation equivalent in the bounded native runtime |
 
 ## Failure And Capacity Model
 
