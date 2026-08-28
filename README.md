@@ -10,6 +10,7 @@ The public package contains the Java API and verified Windows/Linux native artif
 
 - [Quick start](#quick-start)
 - [Choose a profile](#choose-a-profile)
+- [Critical runtime limits](#critical-runtime-limits)
 - [Production recipes](#common-production-recipes)
 - [Kubernetes without ZooKeeper](#kubernetes-without-zookeeper)
 - [Supported contracts](#supported-contract-surface)
@@ -309,6 +310,86 @@ An explicit property always overrides the selected profile.
 | Default provider concurrency | 16 | 128 | 512 |
 
 </details>
+
+## Critical Runtime Limits
+
+The following values are the effective `micro` defaults unless an explicit property overrides them. Profile-dependent values grow in `balanced` and `throughput`.
+
+| Limit | Default | What it protects |
+|---|---:|---|
+| Consumer RPC deadline | `3000 ms` | Total time spent waiting for an in-flight permit, command queue, and response |
+| Consumer startup wait | `3000 ms` | Time allowed for required providers to become reachable |
+| TCP connect attempt | `3000 ms` | Internal limit for one native connection attempt; reconnect continues after failure |
+| Provider request deadline | `30000 ms` | Provider queue, Java dispatch, and response completion time |
+| Provider drain wait | `10000 ms` | Graceful shutdown wait for active work |
+| Consumer payload | `8388608` bytes (`8 MiB`) | One encoded request or response body |
+| Provider payload | `8388608` bytes (`8 MiB`) | One incoming request or generated response body |
+| Decoded collection | `100000` items | Object growth caused by a large `List`, `Set`, array, or `Map` |
+| Connections per endpoint | `2` | Persistent native connections and Kubernetes pod distribution |
+| Consumer max in-flight | `64` | Outstanding calls per generated client |
+| Command queue | `32` per connection | Calls waiting for a native connection |
+| Callback queue | `256` | Async completions waiting for a callback worker |
+| Provider business workers | `4` | Java business dispatch threads |
+| Provider default concurrency | `16` | Active calls sharing the default executor lane |
+| Provider queue | `64` | Work waiting for Java business workers |
+| Retained request buffers | `16`, at most `65536` bytes each | Reusable direct-buffer retention after calls complete |
+
+### How Payload Limits Work
+
+`max-payload-bytes` is a per-call hard ceiling. It is not reserved memory and it is not a total process memory limit.
+
+- Consumer request buffers start at `1024` bytes and grow only when encoding needs more space.
+- Provider response buffers also start at `1024` bytes and grow only when needed.
+- Outbound requests are checked after Hessian2 encoding and before they enter the native command queue.
+- Incoming frame length is checked before the complete body is allocated.
+- Response growth stops at the configured provider limit.
+- The limit applies to the encoded Dubbo body, including protocol and Hessian2 data. It may be slightly larger than the business DTO content.
+- Consumer and provider limits should normally match. A provider limit may be lower when the service deliberately accepts smaller requests.
+
+An `8 MiB` limit does **not** allocate `8 MiB` for every call. However, it permits a call to grow that large. Memory risk is therefore related to both payload and concurrency:
+
+```text
+possible active payload memory ~= max-payload-bytes x active large calls
+```
+
+Do not keep an `8 MiB` ceiling when valid payloads are below `256 KiB`. Lowering the limit reduces the maximum burst allocation and rejects invalid data earlier.
+
+`reactor.dubbo.consumer.max-collection-items` is a separate object-allocation guard. The generated provider dispatcher uses the same codec limit, even though the property is under `consumer`. A small encoded payload can still create many Java objects, so tune both byte and collection limits.
+
+Example for small JSON-like DTO contracts:
+
+```properties
+reactor.dubbo.consumer.max-payload-bytes=1048576
+reactor.dubbo.provider.max-payload-bytes=1048576
+reactor.dubbo.consumer.max-collection-items=5000
+reactor.dubbo.consumer.max-in-flight=32
+reactor.dubbo.consumer.retained-buffers=8
+reactor.dubbo.consumer.max-retained-buffer-bytes=65536
+```
+
+There is currently no per-method payload override. Move unusually large contracts to a separate deployment or process when they require a very different memory budget.
+
+### How Timeouts Work
+
+The consumer timeout is one end-to-end RPC budget. Queue wait reduces the time left for the response. When the deadline expires, pending native state is removed and the invocation fails without automatic replay.
+
+The provider timeout includes waiting in the provider business queue and waiting for the Java result. On expiry, Rust cancels the native response handle and returns a server-timeout response. Rust cannot safely interrupt a synchronous Java method that is blocked inside JDBC or an HTTP client. Those dependencies must have their own shorter timeouts.
+
+A practical timeout chain leaves a small margin at every layer:
+
+```properties
+# Example when the inbound HTTP deadline is 3000 ms.
+reactor.dubbo.provider.request-timeout-ms=2000
+reactor.dubbo.consumer.timeout-ms=2500
+```
+
+In this example, database and outbound HTTP timeouts should be below `2000 ms`. Per-method `timeout` annotation values are not supported.
+
+### Compression
+
+The native wire path does not currently compress payloads. There is no Gzip, LZ4, Zstd, or compression negotiation. Frames use the supported Hessian2 encoding directly.
+
+This avoids compression CPU, temporary buffers, and p99 latency on normal API payloads. For large data, prefer a smaller DTO, pagination, or a separate bulk-transfer design. Application-managed compressed `byte[]` is possible, but the application must enforce a maximum decompressed size and accept the extra CPU and allocation cost.
 
 ## Common Production Recipes
 

@@ -10,6 +10,7 @@ Public paket, Java API'sini ve doğrulanmış Windows/Linux native artifact'lar�
 
 - [Hızlı başlangıç](#hızlı-başlangıç)
 - [Profil seçimi](#profil-seçimi)
+- [Kritik runtime limitleri](#kritik-runtime-limitleri)
 - [Production reçeteleri](#sık-kullanılan-production-reçeteleri)
 - [ZooKeeper olmadan Kubernetes](#zookeeper-olmadan-kubernetes-kullanımı)
 - [Desteklenen contract yapısı](#desteklenen-contract-yapısı)
@@ -309,6 +310,86 @@ Açıkça verilen bir property, profil değerinin üzerine yazılır.
 | Varsayılan provider concurrency | 16 | 128 | 512 |
 
 </details>
+
+## Kritik Runtime Limitleri
+
+Aşağıdaki değerler, açıkça başka bir property verilmediğinde geçerli olan `micro` varsayılanlarıdır. Profile bağlı değerler `balanced` ve `throughput` profillerinde büyür.
+
+| Limit | Varsayılan | Neyi korur? |
+|---|---:|---|
+| Consumer RPC süresi | `3000 ms` | In-flight izni, command queue ve response için kullanılan toplam süre |
+| Consumer başlangıç beklemesi | `3000 ms` | Zorunlu provider'ların erişilebilir olması için beklenen süre |
+| TCP bağlantı denemesi | `3000 ms` | Tek native bağlantı denemesinin internal sınırı; hata sonrası yeniden bağlantı devam eder |
+| Provider request süresi | `30000 ms` | Provider queue, Java dispatch ve response tamamlanma süresi |
+| Provider kapanış beklemesi | `10000 ms` | Aktif işler için güvenli kapanış beklemesi |
+| Consumer payload | `8388608` byte (`8 MiB`) | Tek bir encoded request veya response body |
+| Provider payload | `8388608` byte (`8 MiB`) | Tek bir gelen request veya üretilen response body |
+| Decode edilen collection | `100000` eleman | Büyük `List`, `Set`, array veya `Map` nedeniyle oluşan nesne artışı |
+| Endpoint başına connection | `2` | Kalıcı native bağlantılar ve Kubernetes pod dağılımı |
+| Consumer max in-flight | `64` | Generated client başına devam eden çağrı sayısı |
+| Command queue | Connection başına `32` | Native connection bekleyen çağrılar |
+| Callback queue | `256` | Callback worker bekleyen asenkron sonuçlar |
+| Provider business worker | `4` | Java business dispatch thread'leri |
+| Provider varsayılan concurrency | `16` | Varsayılan executor hattını paylaşan aktif çağrılar |
+| Provider queue | `64` | Java business worker bekleyen işler |
+| Tutulan request buffer | `16` adet, her biri en fazla `65536` byte | Çağrı tamamlandıktan sonra yeniden kullanım için tutulan direct buffer'lar |
+
+### Payload Limitleri Nasıl Çalışır?
+
+`max-payload-bytes`, her çağrı için uygulanan kesin üst sınırdır. Önceden ayrılmış memory değildir. Process'in toplam memory limiti de değildir.
+
+- Consumer request buffer'ı `1024` byte ile başlar. Yalnızca encoding daha fazla alan isterse büyür.
+- Provider response buffer'ı da `1024` byte ile başlar ve gerektiğinde büyür.
+- Dışarı giden request, Hessian2 encoding tamamlandıktan sonra native command queue'ya girmeden kontrol edilir.
+- Gelen frame uzunluğu, body'nin tamamı ayrılmadan önce kontrol edilir.
+- Response buffer büyümesi provider limitinde durur.
+- Limit; protokol ve Hessian2 verisi dahil encoded Dubbo body için geçerlidir. Business DTO içeriğinden biraz daha büyük olabilir.
+- Consumer ve provider limitlerini normalde aynı tutun. Provider bilinçli olarak daha küçük request kabul ediyorsa provider limiti daha düşük olabilir.
+
+`8 MiB` sınır, her çağrıda `8 MiB` memory ayırmaz. Ancak tek bir çağrının bu boyuta kadar büyümesine izin verir. Bu nedenle memory riski payload ve concurrency değerlerinin birlikte değerlendirilmesiyle bulunur:
+
+```text
+olası aktif payload memory ~= max-payload-bytes x aynı anda çalışan büyük çağrı sayısı
+```
+
+Geçerli payload boyutunuz `256 KiB` altındaysa limiti gereksiz yere `8 MiB` bırakmayın. Daha küçük limit, ani allocation üst sınırını düşürür ve geçersiz veriyi daha erken reddeder.
+
+`reactor.dubbo.consumer.max-collection-items` ayrı bir nesne allocation korumasıdır. Property adı `consumer` altında olsa da generated provider dispatcher aynı codec limitini kullanır. Küçük bir encoded payload çok fazla Java nesnesi oluşturabilir. Bu nedenle byte ve collection limitlerini birlikte ayarlayın.
+
+Küçük JSON benzeri DTO contract'ları için örnek:
+
+```properties
+reactor.dubbo.consumer.max-payload-bytes=1048576
+reactor.dubbo.provider.max-payload-bytes=1048576
+reactor.dubbo.consumer.max-collection-items=5000
+reactor.dubbo.consumer.max-in-flight=32
+reactor.dubbo.consumer.retained-buffers=8
+reactor.dubbo.consumer.max-retained-buffer-bytes=65536
+```
+
+Şu anda metot bazlı payload override yoktur. Çok farklı memory bütçesi isteyen büyük contract'ları ayrı deployment veya process olarak ayırın.
+
+### Timeout Değerleri Nasıl Çalışır?
+
+Consumer timeout, RPC çağrısının tek ve toplam süre bütçesidir. Queue'da geçen süre, response için kalan süreden düşer. Süre dolduğunda bekleyen native state temizlenir. Çağrı hata ile biter ve otomatik tekrar edilmez.
+
+Provider timeout, provider business queue beklemesini ve Java sonucunu bekleme süresini kapsar. Süre dolduğunda Rust native response handle'ı iptal eder ve server-timeout response döner. Rust, JDBC veya HTTP client içinde bloklanan senkron Java metodunu güvenli şekilde zorla durduramaz. Bu bağımlılıkların daha kısa kendi timeout değerleri olmalıdır.
+
+Her katmanda küçük bir süre payı bırakan örnek timeout zinciri:
+
+```properties
+# Gelen HTTP timeout değeri 3000 ms ise örnek ayarlar.
+reactor.dubbo.provider.request-timeout-ms=2000
+reactor.dubbo.consumer.timeout-ms=2500
+```
+
+Bu örnekte database ve dış HTTP timeout değerleri `2000 ms` altında olmalıdır. Metot bazlı `timeout` annotation değeri desteklenmez.
+
+### Sıkıştırma
+
+Native wire akışında şu anda payload sıkıştırması yoktur. Gzip, LZ4, Zstd veya sıkıştırma uzlaşması kullanılmaz. Frame'ler desteklenen Hessian2 encoding ile doğrudan taşınır.
+
+Bu seçim normal API payload'larında sıkıştırma CPU'sunu, geçici buffer'ları ve p99 latency maliyetini önler. Büyük verilerde önce daha küçük DTO, pagination veya ayrı bulk-transfer tasarımı kullanın. Uygulamanın yönettiği sıkıştırılmış `byte[]` kullanılabilir. Bu durumda uygulama, açılmış verinin maksimum boyutunu ayrıca sınırlamalı ve ek CPU ile allocation maliyetini kabul etmelidir.
 
 ## Sık Kullanılan Production Reçeteleri
 
