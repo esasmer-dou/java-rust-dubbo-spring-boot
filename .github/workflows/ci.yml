@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  public-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Reject private and internal source surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='(^|/)(rust-dubbo-core|rust-dubbo-native|benchmark|docs|release-notes|packaging|java-rust-dubbo-integration-tests|java-rust-dubbo-interop-tests|java-rust-dubbo-packaging-tests|java-rust-dubbo-nmc-compat-tests|java-rust-dubbo-nmc-provider-compat-tests)(/|$)|(^|/)Cargo\.(toml|lock)$|(^|/)\.cargo(/|$)|\.rs$|(^|/)src/test/'
+          forbidden="$(git ls-files | grep -E "$pattern" || true)"
+          if [[ -n "$forbidden" ]]; then
+            printf 'Forbidden public files:\n%s\n' "$forbidden"
+            exit 1
+          fi
+          private_pattern='com[.]zenia|nmc[-]store|ATP''AzureRepository'
+          if git grep -n -E "$private_pattern" -- .; then
+            echo 'Private compatibility reference detected.'
+            exit 1
+          fi
+      - name: Verify pinned native checksums
+        run: sha256sum --check NATIVE_SHA256SUMS
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Semeru Java 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: semeru
+          java-version: '21'
+          cache: maven
+      - name: Build production modules
+        run: mvn -B -ntp clean verify
+      - name: Verify GLIBC 2.17 boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary='java-rust-dubbo-native-linux-x64/src/main/resources/native/librust_dubbo-linux-x64.so'
+          max_glibc="$(objdump -T "$binary" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | cut -d_ -f2 | sort -Vu | tail -1)"
+          [[ -n "$max_glibc" ]]
+          newest="$(printf '%s\n' "$max_glibc" '2.17' | sort -V | tail -1)"
+          [[ "$newest" == '2.17' ]] || { echo "GLIBC boundary exceeded: $max_glibc"; exit 1; }
+      - name: Load Linux native library and verify ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/NativeSmoke.java" <<'JAVA'
+          import com.reactor.rust.dubbo.runtime.NativeDubboBridge;
+          public final class NativeSmoke {
+              public static void main(String[] args) {
+                  NativeDubboBridge.ensureLoaded();
+                  String metrics = NativeDubboBridge.metricsJson();
+                  if (metrics == null || !metrics.startsWith("{")) {
+                      throw new IllegalStateException("Native metrics are unavailable");
+                  }
+              }
+          }
+          JAVA
+          version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          cp="java-rust-dubbo-runtime/target/java-rust-dubbo-runtime-$version.jar:java-rust-dubbo-native-linux-x64/target/java-rust-dubbo-native-linux-x64-$version.jar"
+          javac -cp "$cp" -d "$RUNNER_TEMP" "$RUNNER_TEMP/NativeSmoke.java"
+          java -cp "$cp:$RUNNER_TEMP" NativeSmoke
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Semeru Java 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: semeru
+          java-version: '21'
+          cache: maven
+      - name: Build production modules
+        run: mvn -B -ntp clean verify
+      - name: Verify pinned native checksums
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-Content NATIVE_SHA256SUMS | ForEach-Object {
+            if ($_ -match '^([0-9a-f]{64})\s+(.+)$') {
+              $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $matches[2]).Hash.ToLowerInvariant()
+              if ($actual -ne $matches[1]) { $failed = $true; Write-Error "Checksum mismatch: $($matches[2])" }
+            }
+          }
+          if ($failed) { exit 1 }
+      - name: Load Windows native library and verify ABI
+        shell: pwsh
+        run: |
+          @'
+          import com.reactor.rust.dubbo.runtime.NativeDubboBridge;
+          public final class NativeSmoke {
+              public static void main(String[] args) {
+                  NativeDubboBridge.ensureLoaded();
+                  String metrics = NativeDubboBridge.metricsJson();
+                  if (metrics == null || !metrics.startsWith("{")) {
+                      throw new IllegalStateException("Native metrics are unavailable");
+                  }
+              }
+          }
+          '@ | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\NativeSmoke.java"
+          $version = (& mvn -q "-DforceStdout" help:evaluate "-Dexpression=project.version" | Select-Object -Last 1).Trim()
+          $cp = "java-rust-dubbo-runtime\target\java-rust-dubbo-runtime-$version.jar;java-rust-dubbo-native-windows-x64\target\java-rust-dubbo-native-windows-x64-$version.jar"
+          javac -cp $cp -d $env:RUNNER_TEMP "$env:RUNNER_TEMP\NativeSmoke.java"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          java -cp "$cp;$env:RUNNER_TEMP" NativeSmoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

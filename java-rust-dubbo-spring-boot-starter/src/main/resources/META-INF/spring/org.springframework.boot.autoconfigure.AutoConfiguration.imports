@@ -1,0 +1,2 @@
+com.reactor.rust.dubbo.spring.RustDubboAutoConfiguration
+com.reactor.rust.dubbo.spring.RustDubboActuatorAutoConfiguration

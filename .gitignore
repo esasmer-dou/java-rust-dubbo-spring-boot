@@ -1,0 +1,27 @@
+target/
+**/target/
+.idea/
+.vscode/
+*.iml
+*.log
+
+# Native implementation source is maintained in the private source repository.
+Cargo.toml
+Cargo.lock
+.cargo/
+**/*.rs
+rust-dubbo-core/
+rust-dubbo-native/
+native-target/
+
+# Internal engineering surfaces are not part of the public distribution.
+**/src/test/
+benchmark/
+docs/
+release-notes/
+packaging/
+java-rust-dubbo-integration-tests/
+java-rust-dubbo-interop-tests/
+java-rust-dubbo-packaging-tests/
+java-rust-dubbo-nmc-compat-tests/
+java-rust-dubbo-nmc-provider-compat-tests/

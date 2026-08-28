@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Semeru Java 21 and Maven publishing
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: semeru
+          java-version: '21'
+          cache: maven
+          server-id: github
+          server-username-env-var: GITHUB_ACTOR
+          server-password-env-var: GITHUB_TOKEN
+      - name: Verify tag, source boundary and native artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          pom_version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          [[ "$version" == "$pom_version" ]] || { echo "Tag/POM mismatch: $version != $pom_version"; exit 1; }
+          pattern='(^|/)(rust-dubbo-core|rust-dubbo-native|benchmark|docs|release-notes|packaging|java-rust-dubbo-integration-tests|java-rust-dubbo-interop-tests|java-rust-dubbo-packaging-tests|java-rust-dubbo-nmc-compat-tests|java-rust-dubbo-nmc-provider-compat-tests)(/|$)|(^|/)Cargo\.(toml|lock)$|(^|/)\.cargo(/|$)|\.rs$|(^|/)src/test/'
+          forbidden="$(git ls-files | grep -E "$pattern" || true)"
+          if [[ -n "$forbidden" ]]; then
+            printf 'Forbidden public files:\n%s\n' "$forbidden"
+            exit 1
+          fi
+          private_pattern='com[.]zenia|nmc[-]store|ATP''AzureRepository'
+          if git grep -n -E "$private_pattern" -- .; then
+            echo 'Private compatibility reference detected.'
+            exit 1
+          fi
+          sha256sum --check NATIVE_SHA256SUMS
+      - name: Build and publish Maven artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mvn -B -ntp clean deploy
+      - name: Verify GitHub Packages from an empty Maven cache
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p "$RUNNER_TEMP/package-smoke"
+          cat > "$RUNNER_TEMP/package-smoke/pom.xml" <<EOF
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>release.smoke</groupId><artifactId>consumer</artifactId><version>1</version>
+            <repositories><repository><id>github</id><url>https://maven.pkg.github.com/esasmer-dou/java-rust-dubbo-spring-boot</url></repository></repositories>
+            <dependencies>
+              <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-spring-boot-starter</artifactId><version>$version</version></dependency>
+              <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-native-linux-x64</artifactId><version>$version</version><scope>runtime</scope></dependency>
+              <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-codegen</artifactId><version>$version</version><scope>provided</scope></dependency>
+            </dependencies>
+          </project>
+          EOF
+          mvn -B -ntp -U -Dmaven.repo.local="$RUNNER_TEMP/empty-m2" -f "$RUNNER_TEMP/package-smoke/pom.xml" dependency:go-offline
+      - name: Generate release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mvn -B -ntp org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom \
+            -DoutputFormat=json -DschemaVersion=1.6 -DincludeTestScope=false \
+            -DoutputName="java-rust-dubbo-spring-boot-$version-maven-sbom"
+          mkdir -p release-assets
+          cp java-rust-dubbo-native-windows-x64/src/main/resources/native/rust_dubbo-windows-x64.dll release-assets/
+          cp java-rust-dubbo-native-linux-x64/src/main/resources/native/librust_dubbo-linux-x64.so release-assets/
+          cp NATIVE_SBOM.cdx.json "release-assets/rust-dubbo-native-$version-sbom.json"
+          cp NATIVE_CORE_SBOM.cdx.json "release-assets/rust-dubbo-core-$version-sbom.json"
+          cp "target/java-rust-dubbo-spring-boot-$version-maven-sbom.json" release-assets/
+          (cd release-assets && sha256sum ./* > SHA256SUMS)
+      - name: Publish stable GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --title "Java Rust Dubbo Spring Boot ${GITHUB_REF_NAME#v}" \
+            --notes "Public Java production distribution with verified Windows x64 and GLIBC 2.17 Linux x64 native artifacts. Rust implementation source is intentionally not included."

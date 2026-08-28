@@ -1,0 +1,8 @@
+Java Rust Dubbo Spring Boot
+Copyright 2026
+
+The compatibility annotations expose the package and public member names used by
+Apache Dubbo annotations. They are an independent minimal implementation and do
+not include the Apache Dubbo runtime.
+
+Apache Dubbo is licensed under the Apache License, Version 2.0.

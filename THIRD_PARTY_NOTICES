@@ -1,0 +1,26 @@
+Java Rust Dubbo Spring Boot - Third-Party Notices
+
+The prebuilt native libraries include third-party Rust components. The exact
+component versions, package URLs and license expressions are recorded in
+NATIVE_SBOM.cdx.json and NATIVE_CORE_SBOM.cdx.json.
+
+The native dependency set uses the following SPDX license families:
+
+- Apache-2.0
+- Apache-2.0 WITH LLVM-exception
+- MIT
+- Unlicense
+- Unicode-3.0
+
+The dependency set includes bytes, cesu8, cfg-if, combine, crossbeam-channel,
+crossbeam-utils, jni, jni-sys, libc, log, memchr, mio, pin-project-lite,
+proc-macro2, quote, same-file, socket2, syn, thiserror, tokio, unicode-ident,
+walkdir, wasi, winapi-util, windows-link, windows-sys and windows-targets.
+
+Apache-2.0 terms are included in LICENSE. MIT, Unlicense and Unicode-3.0
+components remain subject to their respective upstream copyright notices and
+license terms identified by the package URLs in the CycloneDX SBOM files.
+
+Apache Dubbo names are used only for source-compatible annotation contracts.
+The Apache Dubbo runtime is not included. Apache Dubbo is licensed under the
+Apache License, Version 2.0.

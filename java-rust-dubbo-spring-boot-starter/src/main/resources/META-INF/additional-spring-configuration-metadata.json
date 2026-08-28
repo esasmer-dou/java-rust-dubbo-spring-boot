@@ -1,0 +1,187 @@
+{
+  "properties": [
+    {
+      "name": "reactor.dubbo.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Enables the generated Rust-backed Dubbo consumer and provider runtime."
+    },
+    {
+      "name": "reactor.dubbo.profile",
+      "type": "java.lang.String",
+      "defaultValue": "micro",
+      "description": "Applies the micro, balanced, or throughput resource preset. Explicit properties always win."
+    },
+    {
+      "name": "reactor.dubbo.runtime.io-workers",
+      "type": "java.lang.Integer",
+      "defaultValue": 1,
+      "description": "Number of Tokio I/O workers shared by native Dubbo consumers."
+    },
+    {
+      "name": "reactor.dubbo.runtime.callback-workers",
+      "type": "java.lang.Integer",
+      "defaultValue": 1,
+      "description": "Number of bounded native-to-Java completion callback workers."
+    },
+    {
+      "name": "reactor.dubbo.runtime.callback-queue-capacity",
+      "type": "java.lang.Integer",
+      "defaultValue": 256,
+      "description": "Maximum queued native-to-Java async completion callbacks."
+    },
+    {
+      "name": "reactor.dubbo.runtime.thread-stack-bytes",
+      "type": "java.lang.Integer",
+      "defaultValue": 262144,
+      "description": "Stack size of native Dubbo runtime and callback threads."
+    },
+    {
+      "name": "reactor.dubbo.consumer.providers",
+      "type": "java.lang.String",
+      "defaultValue": "127.0.0.1:20880",
+      "description": "Comma-separated static provider host:port endpoints. Kubernetes Service DNS is supported."
+    },
+    {
+      "name": "reactor.dubbo.consumer.connections-per-endpoint",
+      "type": "java.lang.Integer",
+      "defaultValue": 2,
+      "description": "Bounded persistent TCP connections opened for each provider endpoint."
+    },
+    {
+      "name": "reactor.dubbo.consumer.command-queue-capacity",
+      "type": "java.lang.Integer",
+      "defaultValue": 32,
+      "description": "Bounded command queue capacity per native connection."
+    },
+    {
+      "name": "reactor.dubbo.consumer.max-in-flight",
+      "type": "java.lang.Integer",
+      "defaultValue": 64,
+      "description": "Maximum concurrent outstanding calls per generated consumer client."
+    },
+    {
+      "name": "reactor.dubbo.consumer.heartbeat-interval-ms",
+      "type": "java.lang.Integer",
+      "defaultValue": 30000,
+      "description": "Idle connection heartbeat interval. Set zero only when an external network policy owns idle connection liveness."
+    },
+    {
+      "name": "reactor.dubbo.consumer.timeout-ms",
+      "type": "java.lang.Integer",
+      "defaultValue": 3000,
+      "description": "End-to-end native RPC timeout used by generated clients."
+    },
+    {
+      "name": "reactor.dubbo.consumer.max-payload-bytes",
+      "type": "java.lang.Integer",
+      "defaultValue": 8388608,
+      "description": "Hard upper bound for a consumer request or response payload."
+    },
+    {
+      "name": "reactor.dubbo.consumer.max-collection-items",
+      "type": "java.lang.Integer",
+      "defaultValue": 100000,
+      "description": "Decode safety bound for generated arrays, lists, and maps."
+    },
+    {
+      "name": "reactor.dubbo.consumer.initial-buffer-bytes",
+      "type": "java.lang.Integer",
+      "defaultValue": 1024,
+      "description": "Initial direct Hessian request buffer capacity per active Java caller."
+    },
+    {
+      "name": "reactor.dubbo.consumer.retained-buffers",
+      "type": "java.lang.Integer",
+      "defaultValue": 16,
+      "description": "Maximum number of reusable request buffers retained globally. Set zero for the smallest idle footprint."
+    },
+    {
+      "name": "reactor.dubbo.consumer.max-retained-buffer-bytes",
+      "type": "java.lang.Integer",
+      "defaultValue": 65536,
+      "description": "Largest request buffer eligible for retention after a call."
+    },
+    {
+      "name": "reactor.dubbo.consumer.startup-check",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Fails application startup when references with check=true cannot reach a provider."
+    },
+    {
+      "name": "reactor.dubbo.consumer.startup-timeout-ms",
+      "type": "java.lang.Integer",
+      "defaultValue": 3000,
+      "description": "Maximum startup wait for references with check=true."
+    },
+    {
+      "name": "reactor.dubbo.provider.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "Starts the native Dubbo provider listener for generated @DubboService dispatchers."
+    },
+    {
+      "name": "reactor.dubbo.provider.port",
+      "type": "java.lang.Integer",
+      "defaultValue": 20880,
+      "description": "Native Dubbo provider TCP listen port."
+    },
+    {
+      "name": "reactor.dubbo.provider.io-workers",
+      "type": "java.lang.Integer",
+      "defaultValue": 1,
+      "description": "Dedicated Tokio I/O workers for the provider listener. This runtime is separate from Rust Hyper."
+    },
+    {
+      "name": "reactor.dubbo.provider.business-workers",
+      "type": "java.lang.Integer",
+      "defaultValue": 4,
+      "description": "Bounded native workers allowed to enter generated Java provider dispatchers."
+    },
+    {
+      "name": "reactor.dubbo.provider.queue-capacity",
+      "type": "java.lang.Integer",
+      "defaultValue": 64,
+      "description": "Bounded provider business queue. Full queues fail fast instead of growing memory without limit."
+    },
+    {
+      "name": "reactor.dubbo.provider.max-payload-bytes",
+      "type": "java.lang.Integer",
+      "defaultValue": 8388608,
+      "description": "Hard upper bound for a provider request or response payload."
+    },
+    {
+      "name": "reactor.dubbo.provider.request-timeout-ms",
+      "type": "java.lang.Integer",
+      "defaultValue": 30000,
+      "description": "Maximum time allowed for provider dispatch and async completion."
+    },
+    {
+      "name": "reactor.dubbo.provider.drain-timeout-ms",
+      "type": "java.lang.Integer",
+      "defaultValue": 10000,
+      "description": "Graceful shutdown wait for in-flight provider requests."
+    },
+    {
+      "name": "reactor.dubbo.provider.default-max-concurrent",
+      "type": "java.lang.Integer",
+      "defaultValue": 16,
+      "description": "Default concurrent execution limit for provider methods without an annotation or named-lane override."
+    },
+    {
+      "name": "reactor.dubbo.provider.executors",
+      "type": "java.util.Map<java.lang.String,com.reactor.rust.dubbo.spring.RustDubboProperties$ExecutorLane>",
+      "description": "Named provider concurrency lanes referenced by @DubboService(executor=...)."
+    }
+  ],
+  "hints": [
+    {
+      "name": "reactor.dubbo.profile",
+      "values": [
+        { "value": "micro", "description": "Smallest default thread, queue, and retention surface." },
+        { "value": "balanced", "description": "Moderate concurrency with bounded memory growth." },
+        { "value": "throughput", "description": "Higher concurrency and retention for measured high-load services." }
+      ]
+    }
+  ]
+}
