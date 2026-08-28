@@ -42,7 +42,7 @@ Use the starter, code generator and exactly one native platform artifact:
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.1.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.1.1</java-rust-dubbo.version>
 </properties>
 
 <dependencies>

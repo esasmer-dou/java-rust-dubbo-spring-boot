@@ -43,7 +43,7 @@ artifact'ını kullanın:
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.1.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.1.1</java-rust-dubbo.version>
 </properties>
 
 <dependencies>

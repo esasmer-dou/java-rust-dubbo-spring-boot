@@ -6,7 +6,7 @@
   <parent>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo-spring-boot-parent</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
   </parent>
   <artifactId>java-rust-dubbo-annotations</artifactId>
   <name>Java Rust Dubbo Compatibility Annotations</name>
