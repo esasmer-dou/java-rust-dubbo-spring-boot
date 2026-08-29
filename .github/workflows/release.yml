@@ -87,6 +87,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
+          notes="$(cat <<'EOF'
+          ## What's New
+
+          A Spring Boot consumer can now connect different `@DubboReference` contracts to different provider applications. Configure an exact route for each `interface + group + version`; Java annotations and business services remain unchanged.
+
+          Route selection happens once at startup. Calls remain generated and reflection-free. Routes use separate bounded connections, queues, timeouts, payload limits, and in-flight budgets while sharing one small Rust Tokio runtime.
+
+          Disconnected sockets are skipped when a healthy configured replica exists. If all replicas are unavailable, waiting remains bounded by the original RPC timeout. Sent business calls are never replayed automatically.
+
+          Production deployments should set `reactor.dubbo.consumer.require-explicit-routes=true`. See the README for complete properties, Kubernetes Service DNS examples, health details, and tuning guidance.
+
+          ## Yenilikler
+
+          Bir Spring Boot consumer artık farklı `@DubboReference` contract'larını farklı provider uygulamalarına bağlayabilir. Her `interface + group + version` kimliği için tam route tanımlanır. Java annotation ve business service kodu değişmez.
+
+          Route seçimi startup sırasında bir kez yapılır. Çağrılar generated ve reflection-free kalır. Route'ların sınırlı connection, queue, timeout, payload ve in-flight bütçeleri ayrıdır. Hepsi aynı küçük Rust Tokio runtime'ını paylaşır.
+
+          Sağlıklı bir replica varsa kopuk socket seçilmez. Bütün replica'lar kapalıysa bekleme mevcut RPC timeout süresiyle sınırlı kalır. Gönderilmiş business çağrıları otomatik olarak tekrar gönderilmez.
+
+          Production ortamında `reactor.dubbo.consumer.require-explicit-routes=true` kullanın. Tüm property'ler, Kubernetes Service DNS örnekleri, health detayları ve tuning bilgileri README içinde bulunur.
+          EOF
+          )"
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --title "Java Rust Dubbo Spring Boot ${GITHUB_REF_NAME#v}" \
-            --notes "Public Java production distribution with verified Windows x64 and GLIBC 2.17 Linux x64 native artifacts. Rust implementation source is intentionally not included."
+            --notes "$notes"

@@ -178,7 +178,9 @@ final class GeneratedSourceWriter {
             line(source, "    clients.register(new com.reactor.rust.dubbo.runtime.DubboClientKey(\""
                     + escape(reference.contract()) + "\", \"" + escape(reference.group())
                     + "\", \"" + escape(reference.version()) + "\"), new "
-                    + clientClass(reference) + '(' + id + ", runtime.clientOptions()));");
+                    + clientClass(reference) + '(' + id + ", runtime.clientOptions(\""
+                    + escape(reference.contract()) + "\", \"" + escape(reference.group())
+                    + "\", \"" + escape(reference.version()) + "\")));");
         }
         line(source, "  }");
         line(source, "");

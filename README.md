@@ -13,6 +13,7 @@ The public package contains the Java API and verified Windows/Linux native artif
 - [Critical runtime limits](#critical-runtime-limits)
 - [Production recipes](#common-production-recipes)
 - [Kubernetes without ZooKeeper](#kubernetes-without-zookeeper)
+- [Multiple provider applications](#multiple-provider-applications)
 - [Supported contracts](#supported-contract-surface)
 - [Configuration reference](#configuration-reference)
 - [Safe tuning](#safe-tuning-order)
@@ -44,7 +45,7 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64 for local development, or Linux x64 with GLIBC 2.17 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.1.1`.
+Current release: `0.2.0`.
 
 ## Quick Start
 
@@ -84,7 +85,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.1.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.2.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -468,6 +469,61 @@ env:
 
 Kubernetes balances new TCP connections. Existing persistent connections remain on the pod selected when they were opened. Increase `connections-per-endpoint` only when load tests show that more provider-pod distribution is needed. Use readiness probes, graceful shutdown, and a termination grace period longer than `reactor.dubbo.provider.drain-timeout-ms`.
 
+## Multiple Provider Applications
+
+Keep the Java fields unchanged. The exact `interface + group + version` identity decides which route is used:
+
+```java
+@Service
+public final class CheckoutService {
+    @DubboReference
+    private CustomerService customerService;
+
+    @DubboReference(group = "sales", version = "v2")
+    private OrderService orderService;
+}
+```
+
+Route each service to its own provider application:
+
+```properties
+reactor.dubbo.profile=micro
+reactor.dubbo.consumer.require-explicit-routes=true
+
+reactor.dubbo.consumer.routes.customer.interface-name=com.example.customer.CustomerService
+reactor.dubbo.consumer.routes.customer.providers=customer-provider:20880
+reactor.dubbo.consumer.routes.customer.connections-per-endpoint=2
+reactor.dubbo.consumer.routes.customer.max-in-flight=32
+reactor.dubbo.consumer.routes.customer.timeout-ms=750
+
+reactor.dubbo.consumer.routes.order.interface-name=com.example.order.OrderService
+reactor.dubbo.consumer.routes.order.group=sales
+reactor.dubbo.consumer.routes.order.version=v2
+reactor.dubbo.consumer.routes.order.providers=order-provider:20880
+reactor.dubbo.consumer.routes.order.connections-per-endpoint=2
+reactor.dubbo.consumer.routes.order.max-in-flight=16
+reactor.dubbo.consumer.routes.order.timeout-ms=1500
+```
+
+`customer` and `order` are readable labels only. Matching uses the full interface name, group, and version. Omitted per-route limits inherit the selected profile or global consumer value.
+
+Use `require-explicit-routes=true` in production when references target different provider applications. A missing or duplicate exact route then stops startup. With the default `false`, an unmatched reference uses the backward-compatible global `reactor.dubbo.consumer.providers` value.
+
+Route selection happens once while generated clients are created. It adds no reflection, registry query, proxy dispatch, or Java map lookup to each call. Routes have separate bounded connections and queues but share one small Rust Tokio runtime; no thread pool is created per route.
+
+For Kubernetes, put the route map in `application.yml` or a mounted ConfigMap. Dynamic map names should not be split into individual environment variables. If one environment variable is required, use Spring Boot's standard `SPRING_APPLICATION_JSON`:
+
+```yaml
+env:
+  - name: SPRING_APPLICATION_JSON
+    value: >-
+      {"reactor":{"dubbo":{"consumer":{"require-explicit-routes":true,
+      "routes":{"customer":{"interface-name":"com.example.customer.CustomerService",
+      "providers":"customer-provider.platform.svc.cluster.local:20880"},
+      "order":{"interface-name":"com.example.order.OrderService","group":"sales",
+      "version":"v2","providers":"order-provider.platform.svc.cluster.local:20880"}}}}}}
+```
+
 ## Supported Contract Surface
 
 - Supported scalar types: Java primitives, boxed primitives, `String`, `BigDecimal`, `Date`, `LocalDate`, `LocalTime`, and `LocalDateTime`.
@@ -536,7 +592,7 @@ Unsupported values are not silently ignored. Explicit use fails the build.
 | `connections` | `reactor.dubbo.consumer.connections-per-endpoint` |
 | `payload` | Consumer/provider `max-payload-bytes` properties |
 | `retries` | Explicit application retry for idempotent operations only; native calls are not replayed automatically |
-| `registry` | `reactor.dubbo.consumer.providers` with a static address or Kubernetes Service DNS |
+| `registry` | Global `reactor.dubbo.consumer.providers` or exact `reactor.dubbo.consumer.routes.<name>` entries with static addresses/Kubernetes Service DNS |
 | `serialization` | The native protocol uses the supported Hessian2 subset |
 | `protocol` | The native data plane uses classic `dubbo://` |
 | `path`, `actives`, `cluster`, `loadbalance` | No annotation equivalent in the bounded native runtime |
@@ -544,7 +600,9 @@ Unsupported values are not silently ignored. Explicit use fails the build.
 ## Failure And Capacity Model
 
 - The consumer keeps persistent bounded connections and reconnects after connection loss.
+- Disconnected sockets are not selected. If all replicas are down, waiting remains bounded by the original RPC timeout.
 - `startup-check=true` waits for required providers. `@DubboReference(check = false)` excludes only that reference from startup readiness.
+- Health details include `unreadyClients`. Native metrics include `clientConnectionWaits` and `clientConnectionWaitTimeouts`.
 - Every RPC has a deadline. Set the RPC timeout below the inbound HTTP timeout.
 - Queues and in-flight calls are bounded. Under overload, rejection is safer than unbounded RSS and tail latency growth.
 - Automatic business retries are not provided. Retry only idempotent operations and keep retries within the caller deadline.
@@ -566,6 +624,8 @@ reactor.dubbo.consumer.max-in-flight=64
 - name: REACTOR_DUBBO_CONSUMER_MAX_IN_FLIGHT
   value: "64"
 ```
+
+The three forms above apply to scalar properties. Use YAML/properties, a mounted ConfigMap, or `SPRING_APPLICATION_JSON` for the named route map.
 
 <details>
 <summary>All runtime and consumer properties</summary>
@@ -591,6 +651,12 @@ reactor.dubbo.consumer.max-in-flight=64
 | `reactor.dubbo.consumer.max-retained-buffer-bytes` | `65536` | Largest buffer kept for reuse |
 | `reactor.dubbo.consumer.startup-check` | `true` | Waits for required providers at startup |
 | `reactor.dubbo.consumer.startup-timeout-ms` | `3000` | Maximum startup readiness wait |
+| `reactor.dubbo.consumer.require-explicit-routes` | `false` | Requires an exact named route for every generated reference |
+| `reactor.dubbo.consumer.routes.<name>.interface-name` | None | Fully qualified interface in the exact route key |
+| `reactor.dubbo.consumer.routes.<name>.group` | Empty | Group matching `@DubboReference` |
+| `reactor.dubbo.consumer.routes.<name>.version` | Empty | Version matching `@DubboReference` |
+| `reactor.dubbo.consumer.routes.<name>.providers` | None | Service-specific endpoint list |
+| `reactor.dubbo.consumer.routes.<name>.<limit>` | Inherited | Per-route connection, queue, in-flight, timeout, payload, collection, and buffer limits |
 
 </details>
 

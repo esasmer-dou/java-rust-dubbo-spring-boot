@@ -1,6 +1,8 @@
 package com.reactor.rust.dubbo.spring;
 
 import com.reactor.rust.dubbo.runtime.DubboClientOptions;
+import com.reactor.rust.dubbo.runtime.DubboClientKey;
+import com.reactor.rust.dubbo.runtime.DubboClientRoutingOptions;
 import com.reactor.rust.dubbo.runtime.DubboRuntimeOptions;
 import com.reactor.rust.dubbo.runtime.DubboProviderOptions;
 import java.util.LinkedHashMap;
@@ -52,6 +54,23 @@ public final class RustDubboProperties {
                 consumer.maxPayloadBytes,
                 consumer.maxCollectionItems, consumer.initialBufferBytes,
                 consumer.retainedBuffers, consumer.maxRetainedBufferBytes);
+    }
+
+    DubboClientRoutingOptions clientRoutingOptions() {
+        DubboClientOptions defaults = clientOptions();
+        Map<DubboClientKey, DubboClientOptions> routes = new LinkedHashMap<>();
+        consumer.routes.forEach((name, route) -> {
+            if (name == null || name.isBlank()) {
+                throw new IllegalArgumentException("Dubbo consumer route name must not be blank");
+            }
+            DubboClientKey key = route.key(name);
+            DubboClientOptions previous = routes.putIfAbsent(key, route.options(name, defaults));
+            if (previous != null) {
+                throw new IllegalArgumentException(
+                        "Duplicate Dubbo consumer route for " + key + " (route " + name + ")");
+            }
+        });
+        return new DubboClientRoutingOptions(defaults, routes, consumer.requireExplicitRoutes);
     }
 
     DubboRuntimeOptions runtimeOptions() {
@@ -157,6 +176,8 @@ public final class RustDubboProperties {
         private int maxRetainedBufferBytes = 64 * 1024;
         private boolean startupCheck = true;
         private int startupTimeoutMs = 3_000;
+        private boolean requireExplicitRoutes;
+        private final Map<String, ConsumerRoute> routes = new LinkedHashMap<>();
 
         public String getProviders() { return providers; }
         public void setProviders(String providers) { this.providers = providers; }
@@ -184,6 +205,85 @@ public final class RustDubboProperties {
         public void setStartupCheck(boolean value) { startupCheck = value; }
         public int getStartupTimeoutMs() { return startupTimeoutMs; }
         public void setStartupTimeoutMs(int value) { startupTimeoutMs = value; }
+        public boolean isRequireExplicitRoutes() { return requireExplicitRoutes; }
+        public void setRequireExplicitRoutes(boolean value) { requireExplicitRoutes = value; }
+        public Map<String, ConsumerRoute> getRoutes() { return routes; }
+    }
+
+    public static final class ConsumerRoute {
+        private String interfaceName;
+        private String group = "";
+        private String version = "";
+        private String providers;
+        private Integer connectionsPerEndpoint;
+        private Integer commandQueueCapacity;
+        private Integer maxInFlight;
+        private Integer heartbeatIntervalMs;
+        private Integer timeoutMs;
+        private Integer maxPayloadBytes;
+        private Integer maxCollectionItems;
+        private Integer initialBufferBytes;
+        private Integer retainedBuffers;
+        private Integer maxRetainedBufferBytes;
+
+        DubboClientKey key(String routeName) {
+            if (interfaceName == null || interfaceName.isBlank()) {
+                throw new IllegalArgumentException(
+                        "reactor.dubbo.consumer.routes." + routeName + ".interface-name must not be blank");
+            }
+            return new DubboClientKey(interfaceName, group, version);
+        }
+
+        DubboClientOptions options(String routeName, DubboClientOptions defaults) {
+            if (providers == null || providers.isBlank()) {
+                throw new IllegalArgumentException(
+                        "reactor.dubbo.consumer.routes." + routeName + ".providers must not be blank");
+            }
+            return new DubboClientOptions(providers,
+                    inherit(connectionsPerEndpoint, defaults.connectionsPerEndpoint()),
+                    inherit(commandQueueCapacity, defaults.commandQueueCapacity()),
+                    inherit(maxInFlight, defaults.maxInFlight()),
+                    inherit(heartbeatIntervalMs, defaults.heartbeatIntervalMs()),
+                    inherit(timeoutMs, defaults.timeoutMs()),
+                    inherit(maxPayloadBytes, defaults.maxPayloadBytes()),
+                    inherit(maxCollectionItems, defaults.maxCollectionItems()),
+                    inherit(initialBufferBytes, defaults.initialBufferBytes()),
+                    inherit(retainedBuffers, defaults.retainedBuffers()),
+                    inherit(maxRetainedBufferBytes, defaults.maxRetainedBufferBytes()));
+        }
+
+        private static int inherit(Integer value, int defaultValue) {
+            return value == null ? defaultValue : value;
+        }
+
+        public String getInterfaceName() { return interfaceName; }
+        public void setInterfaceName(String value) { interfaceName = value; }
+        public String getGroup() { return group; }
+        public void setGroup(String value) { group = value; }
+        public String getVersion() { return version; }
+        public void setVersion(String value) { version = value; }
+        public String getProviders() { return providers; }
+        public void setProviders(String value) { providers = value; }
+        public Integer getConnectionsPerEndpoint() { return connectionsPerEndpoint; }
+        public void setConnectionsPerEndpoint(Integer value) { connectionsPerEndpoint = value; }
+        public Integer getCommandQueueCapacity() { return commandQueueCapacity; }
+        public void setCommandQueueCapacity(Integer value) { commandQueueCapacity = value; }
+        public Integer getMaxInFlight() { return maxInFlight; }
+        public void setMaxInFlight(Integer value) { maxInFlight = value; }
+        public Integer getHeartbeatIntervalMs() { return heartbeatIntervalMs; }
+        public void setHeartbeatIntervalMs(Integer value) { heartbeatIntervalMs = value; }
+        public Integer getTimeoutMs() { return timeoutMs; }
+        public void setTimeoutMs(Integer value) { timeoutMs = value; }
+        public Integer getMaxPayloadBytes() { return maxPayloadBytes; }
+        public void setMaxPayloadBytes(Integer value) { maxPayloadBytes = value; }
+        public Integer getMaxCollectionItems() { return maxCollectionItems; }
+        public void setMaxCollectionItems(Integer value) { maxCollectionItems = value; }
+        public Integer getInitialBufferBytes() { return initialBufferBytes; }
+        public void setInitialBufferBytes(Integer value) { initialBufferBytes = value; }
+        public Integer getRetainedBuffers() { return retainedBuffers; }
+        public void setRetainedBuffers(Integer value) { retainedBuffers = value; }
+        public Integer getMaxRetainedBufferBytes() { return maxRetainedBufferBytes; }
+        public void setMaxRetainedBufferBytes(Integer value) { maxRetainedBufferBytes = value; }
     }
 
     public static final class Provider {

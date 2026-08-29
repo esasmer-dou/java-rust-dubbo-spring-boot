@@ -13,6 +13,7 @@ Public paket, Java API'sini ve doğrulanmış Windows/Linux native artifact'lar�
 - [Kritik runtime limitleri](#kritik-runtime-limitleri)
 - [Production reçeteleri](#sık-kullanılan-production-reçeteleri)
 - [ZooKeeper olmadan Kubernetes](#zookeeper-olmadan-kubernetes-kullanımı)
+- [Birden fazla provider uygulaması](#birden-fazla-provider-uygulaması)
 - [Desteklenen contract yapısı](#desteklenen-contract-yapısı)
 - [Tüm property'ler](#tüm-propertyler)
 - [Güvenli tuning](#güvenli-tuning-sırası)
@@ -44,7 +45,7 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Yerel geliştirme için Windows x64 veya GLIBC 2.17 ve üzeri Linux x64
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.1.1`.
+Güncel sürüm: `0.2.0`.
 
 ## Hızlı Başlangıç
 
@@ -84,7 +85,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.1.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.2.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -468,6 +469,61 @@ env:
 
 Kubernetes yalnızca yeni TCP bağlantılarını pod'lara dağıtır. Açılmış kalıcı bağlantı, seçildiği pod üzerinde kalır. `connections-per-endpoint` değerini ancak yük testi daha geniş pod dağılımına ihtiyaç olduğunu gösterirse artırın. Readiness probe kullanın. Kubernetes termination grace süresi, `reactor.dubbo.provider.drain-timeout-ms` değerinden uzun olsun.
 
+## Birden Fazla Provider Uygulaması
+
+Java field'larını değiştirmeyin. Kullanılacak route'u tam `interface + group + version` kimliği belirler:
+
+```java
+@Service
+public final class CheckoutService {
+    @DubboReference
+    private CustomerService customerService;
+
+    @DubboReference(group = "sales", version = "v2")
+    private OrderService orderService;
+}
+```
+
+Her servisi kendi provider uygulamasına yönlendirin:
+
+```properties
+reactor.dubbo.profile=micro
+reactor.dubbo.consumer.require-explicit-routes=true
+
+reactor.dubbo.consumer.routes.customer.interface-name=com.example.customer.CustomerService
+reactor.dubbo.consumer.routes.customer.providers=customer-provider:20880
+reactor.dubbo.consumer.routes.customer.connections-per-endpoint=2
+reactor.dubbo.consumer.routes.customer.max-in-flight=32
+reactor.dubbo.consumer.routes.customer.timeout-ms=750
+
+reactor.dubbo.consumer.routes.order.interface-name=com.example.order.OrderService
+reactor.dubbo.consumer.routes.order.group=sales
+reactor.dubbo.consumer.routes.order.version=v2
+reactor.dubbo.consumer.routes.order.providers=order-provider:20880
+reactor.dubbo.consumer.routes.order.connections-per-endpoint=2
+reactor.dubbo.consumer.routes.order.max-in-flight=16
+reactor.dubbo.consumer.routes.order.timeout-ms=1500
+```
+
+`customer` ve `order` yalnızca okunabilir etiketlerdir. Eşleşme tam interface adı, group ve version ile yapılır. Route içinde yazılmayan limit seçilen profilden veya global consumer değerinden alınır.
+
+Reference'lar farklı provider uygulamalarını çağırıyorsa production ortamında `require-explicit-routes=true` kullanın. Eksik veya yinelenen tam route startup'ı durdurur. Varsayılan `false` değerinde eşleşmeyen reference, geriye uyumlu global `reactor.dubbo.consumer.providers` değerini kullanır.
+
+Route seçimi generated client oluşturulurken bir kez yapılır. Her çağrıya reflection, registry sorgusu, proxy dispatch veya Java map araması eklenmez. Route'ların connection ve queue sınırları ayrıdır. Aynı küçük Rust Tokio runtime'ını paylaşırlar. Route başına thread pool oluşmaz.
+
+Kubernetes ortamında route map yapısını `application.yml` veya mount edilen ConfigMap içinde tutun. Dinamik map adlarını ayrı environment variable'lara bölmeyin. Tek environment variable gerekiyorsa Spring Boot'un standart `SPRING_APPLICATION_JSON` girişini kullanın:
+
+```yaml
+env:
+  - name: SPRING_APPLICATION_JSON
+    value: >-
+      {"reactor":{"dubbo":{"consumer":{"require-explicit-routes":true,
+      "routes":{"customer":{"interface-name":"com.example.customer.CustomerService",
+      "providers":"customer-provider.platform.svc.cluster.local:20880"},
+      "order":{"interface-name":"com.example.order.OrderService","group":"sales",
+      "version":"v2","providers":"order-provider.platform.svc.cluster.local:20880"}}}}}}
+```
+
 ## Desteklenen Contract Yapısı
 
 - Scalar tipler: Java primitive tipleri, boxed primitive tipler, `String`, `BigDecimal`, `Date`, `LocalDate`, `LocalTime` ve `LocalDateTime`.
@@ -536,7 +592,7 @@ Desteklenmeyen değerler sessizce yok sayılmaz. Açıkça kullanılırsa build 
 | `connections` | `reactor.dubbo.consumer.connections-per-endpoint` |
 | `payload` | Consumer/provider `max-payload-bytes` property'leri |
 | `retries` | Yalnızca idempotent işlemler için uygulama seviyesinde açık retry; native çağrı otomatik tekrarlanmaz |
-| `registry` | Statik adres veya Kubernetes Service DNS ile `reactor.dubbo.consumer.providers` |
+| `registry` | Statik adres/Kubernetes Service DNS ile global `reactor.dubbo.consumer.providers` veya tam `reactor.dubbo.consumer.routes.<name>` tanımı |
 | `serialization` | Native protokol desteklenen Hessian2 alt kümesini kullanır |
 | `protocol` | Native veri düzlemi klasik `dubbo://` kullanır |
 | `path`, `actives`, `cluster`, `loadbalance` | Sınırları belli native runtime içinde annotation karşılığı yoktur |
@@ -544,7 +600,9 @@ Desteklenmeyen değerler sessizce yok sayılmaz. Açıkça kullanılırsa build 
 ## Hata ve Kapasite Modeli
 
 - Consumer, sayısı sınırlı kalıcı bağlantılar kullanır. Bağlantı koparsa yeniden bağlanır.
+- Kopuk socket seçilmez. Bütün replica'lar kapalıysa bekleme mevcut RPC timeout süresiyle sınırlı kalır.
 - `startup-check=true`, zorunlu provider'ları başlangıçta bekler. `@DubboReference(check = false)` yalnızca ilgili reference'ı bu kontrolden çıkarır.
+- Health detayında `unreadyClients` bulunur. Native metrikler `clientConnectionWaits` ve `clientConnectionWaitTimeouts` alanlarını içerir.
 - Her RPC çağrısının süresi sınırlıdır. RPC timeout değerini HTTP timeout değerinden küçük tutun.
 - Queue ve in-flight çağrı sayıları sınırlıdır. Aşırı yükte kontrollü reject, sınırsız RSS ve p99 büyümesinden daha güvenlidir.
 - Otomatik business retry yapılmaz. Yalnızca idempotent işlemleri, çağrının toplam süresi içinde kalacak şekilde tekrar deneyin.
@@ -566,6 +624,8 @@ reactor.dubbo.consumer.max-in-flight=64
 - name: REACTOR_DUBBO_CONSUMER_MAX_IN_FLIGHT
   value: "64"
 ```
+
+Yukarıdaki üç biçim scalar property'ler için geçerlidir. İsimli route map yapısı için YAML/properties, mount edilen ConfigMap veya `SPRING_APPLICATION_JSON` kullanın.
 
 <details>
 <summary>Tüm runtime ve consumer property'leri</summary>
@@ -591,6 +651,12 @@ reactor.dubbo.consumer.max-in-flight=64
 | `reactor.dubbo.consumer.max-retained-buffer-bytes` | `65536` | Yeniden kullanım için tutulan en büyük buffer |
 | `reactor.dubbo.consumer.startup-check` | `true` | Başlangıçta zorunlu provider'ları bekler |
 | `reactor.dubbo.consumer.startup-timeout-ms` | `3000` | Başlangıç hazırlık kontrolünün süre sınırı |
+| `reactor.dubbo.consumer.require-explicit-routes` | `false` | Her generated reference için tam isimli route zorunluluğu getirir |
+| `reactor.dubbo.consumer.routes.<name>.interface-name` | Yok | Tam route anahtarındaki package dahil interface adı |
+| `reactor.dubbo.consumer.routes.<name>.group` | Boş | `@DubboReference` ile aynı group değeri |
+| `reactor.dubbo.consumer.routes.<name>.version` | Boş | `@DubboReference` ile aynı version değeri |
+| `reactor.dubbo.consumer.routes.<name>.providers` | Yok | Servise özel endpoint listesi |
+| `reactor.dubbo.consumer.routes.<name>.<limit>` | Miras alınır | Route'a özel connection, queue, in-flight, timeout, payload, collection ve buffer limitleri |
 
 </details>
 

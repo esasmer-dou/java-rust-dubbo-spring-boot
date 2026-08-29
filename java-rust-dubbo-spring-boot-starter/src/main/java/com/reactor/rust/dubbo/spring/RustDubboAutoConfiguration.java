@@ -22,7 +22,7 @@ public class RustDubboAutoConfiguration {
     @ConditionalOnMissingBean
     NativeDubboRuntime nativeDubboRuntime(RustDubboProperties properties, Environment environment) {
         properties.resolveProfile(environment);
-        return new NativeDubboRuntime(properties.clientOptions(), properties.runtimeOptions(),
+        return new NativeDubboRuntime(properties.clientRoutingOptions(), properties.runtimeOptions(),
                 properties.providerOptions());
     }
 

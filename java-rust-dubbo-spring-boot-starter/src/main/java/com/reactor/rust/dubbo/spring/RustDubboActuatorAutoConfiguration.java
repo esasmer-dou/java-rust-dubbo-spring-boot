@@ -28,6 +28,7 @@ public class RustDubboActuatorAutoConfiguration {
                 return health
                         .withDetail("profile", properties.getProfile())
                         .withDetail("clientsReady", clientsReady)
+                        .withDetail("unreadyClients", runtime.unreadyClients())
                         .withDetail("providerReady", providerReady)
                         .withDetail("nativeMetrics", runtime.metricsJson())
                         .build();

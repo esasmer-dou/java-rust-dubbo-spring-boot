@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class NativeDubboRuntime implements AutoCloseable {
-    private final DubboClientOptions clientOptions;
+    private final DubboClientRoutingOptions clientRouting;
     private final DubboProviderOptions providerOptions;
     private final List<ClientRegistration> clients = new ArrayList<>();
     private long providerHandle;
@@ -26,13 +26,23 @@ public final class NativeDubboRuntime implements AutoCloseable {
 
     public NativeDubboRuntime(DubboClientOptions clientOptions, DubboRuntimeOptions runtimeOptions,
                               DubboProviderOptions providerOptions) {
-        this.clientOptions = clientOptions;
+        this(DubboClientRoutingOptions.defaults(clientOptions), runtimeOptions, providerOptions);
+    }
+
+    public NativeDubboRuntime(DubboClientRoutingOptions clientRouting,
+                              DubboRuntimeOptions runtimeOptions,
+                              DubboProviderOptions providerOptions) {
+        this.clientRouting = clientRouting;
         this.providerOptions = providerOptions;
         NativeDubboBridge.configure(runtimeOptions);
     }
 
     public DubboClientOptions clientOptions() {
-        return clientOptions;
+        return clientRouting.defaultOptions();
+    }
+
+    public DubboClientOptions clientOptions(String service, String group, String version) {
+        return clientRouting.resolve(service, group, version);
     }
 
     public synchronized int createClient(String service, String group, String version) {
@@ -41,10 +51,11 @@ public final class NativeDubboRuntime implements AutoCloseable {
 
     public synchronized int createClient(String service, String group, String version,
                                          boolean startupCheck) {
-        return createClient(service, group, version, clientOptions.providers(),
-                clientOptions.connectionsPerEndpoint(), clientOptions.commandQueueCapacity(),
-                clientOptions.maxInFlight(), clientOptions.heartbeatIntervalMs(),
-                clientOptions.maxPayloadBytes(), startupCheck);
+        DubboClientOptions options = clientOptions(service, group, version);
+        return createClient(service, group, version, options.providers(),
+                options.connectionsPerEndpoint(), options.commandQueueCapacity(),
+                options.maxInFlight(), options.heartbeatIntervalMs(),
+                options.maxPayloadBytes(), startupCheck);
     }
 
     public synchronized int createClient(String service, String group, String version, String providers,
@@ -55,7 +66,8 @@ public final class NativeDubboRuntime implements AutoCloseable {
         int clientId = NativeDubboBridge.createClient(service, group, version, providers,
                 connectionsPerEndpoint, commandQueueCapacity, maxInFlight,
                 heartbeatIntervalMs, maxPayloadBytes);
-        clients.add(new ClientRegistration(clientId, startupCheck));
+        clients.add(new ClientRegistration(clientId,
+                new DubboClientKey(service, group, version), startupCheck));
         return clientId;
     }
 
@@ -74,6 +86,17 @@ public final class NativeDubboRuntime implements AutoCloseable {
         return true;
     }
 
+    public synchronized List<String> unreadyClients() {
+        ensureOpen();
+        List<String> unready = new ArrayList<>();
+        for (ClientRegistration client : clients) {
+            if (client.startupCheck() && !NativeDubboBridge.clientReady(client.id())) {
+                unready.add(client.key().toString());
+            }
+        }
+        return List.copyOf(unready);
+    }
+
     public void awaitClientsReady(int timeoutMs) {
         if (timeoutMs <= 0) {
             throw new IllegalArgumentException("startupTimeoutMs must be positive");
@@ -82,7 +105,8 @@ public final class NativeDubboRuntime implements AutoCloseable {
         while (!clientsReady()) {
             if (System.nanoTime() >= deadline) {
                 throw new DubboNativeException(
-                        "Native Dubbo providers were not reachable within " + timeoutMs + " ms");
+                        "Native Dubbo providers were not reachable within " + timeoutMs
+                                + " ms; unready services=" + unreadyClients());
             }
             try {
                 Thread.sleep(10);
@@ -150,6 +174,6 @@ public final class NativeDubboRuntime implements AutoCloseable {
         }
     }
 
-    private record ClientRegistration(int id, boolean startupCheck) {
+    private record ClientRegistration(int id, DubboClientKey key, boolean startupCheck) {
     }
 }

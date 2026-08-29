@@ -115,6 +115,89 @@
       "description": "Maximum startup wait for references with check=true."
     },
     {
+      "name": "reactor.dubbo.consumer.require-explicit-routes",
+      "type": "java.lang.Boolean",
+      "defaultValue": false,
+      "description": "Requires every generated @DubboReference contract, group, and version to have an exact named route. Recommended when one consumer calls different provider applications."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes",
+      "type": "java.util.Map<java.lang.String,com.reactor.rust.dubbo.spring.RustDubboProperties$ConsumerRoute>",
+      "description": "Named startup-only routes that map an exact Dubbo interface, group, and version to its provider endpoints and optional client resource overrides."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.interface-name",
+      "type": "java.lang.String",
+      "description": "Fully qualified Dubbo interface name matched by this route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.group",
+      "type": "java.lang.String",
+      "defaultValue": "",
+      "description": "Dubbo group matched by this route. It must equal @DubboReference(group=...)."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.version",
+      "type": "java.lang.String",
+      "defaultValue": "",
+      "description": "Dubbo version matched by this route. It must equal @DubboReference(version=...)."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.providers",
+      "type": "java.lang.String",
+      "description": "Required comma-separated host:port endpoints for this exact route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.connections-per-endpoint",
+      "type": "java.lang.Integer",
+      "description": "Optional route override. Inherits reactor.dubbo.consumer.connections-per-endpoint when omitted."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.command-queue-capacity",
+      "type": "java.lang.Integer",
+      "description": "Optional bounded queue override for each connection in this route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.max-in-flight",
+      "type": "java.lang.Integer",
+      "description": "Optional maximum concurrent calls override for this generated client."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.heartbeat-interval-ms",
+      "type": "java.lang.Integer",
+      "description": "Optional heartbeat interval override for this route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.timeout-ms",
+      "type": "java.lang.Integer",
+      "description": "Optional end-to-end RPC deadline override for this route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.max-payload-bytes",
+      "type": "java.lang.Integer",
+      "description": "Optional per-call encoded request or response hard limit for this route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.max-collection-items",
+      "type": "java.lang.Integer",
+      "description": "Optional decode collection-item guard for this route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.initial-buffer-bytes",
+      "type": "java.lang.Integer",
+      "description": "Optional initial generated request-buffer capacity for this route."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.retained-buffers",
+      "type": "java.lang.Integer",
+      "description": "Optional reusable Java request-buffer count for this generated client."
+    },
+    {
+      "name": "reactor.dubbo.consumer.routes.*.max-retained-buffer-bytes",
+      "type": "java.lang.Integer",
+      "description": "Optional largest request buffer retained by this generated client."
+    },
+    {
       "name": "reactor.dubbo.provider.enabled",
       "type": "java.lang.Boolean",
       "defaultValue": false,
