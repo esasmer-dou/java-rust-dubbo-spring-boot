@@ -9,6 +9,7 @@ Public paket, Java API'sini ve doğrulanmış Windows/Linux native artifact'lar�
 ## İçindekiler
 
 - [Hızlı başlangıç](#hızlı-başlangıç)
+- [Annotation package ve 0.3 geçişi](#annotation-package-ve-03-geçişi)
 - [Profil seçimi](#profil-seçimi)
 - [Kritik runtime limitleri](#kritik-runtime-limitleri)
 - [Production reçeteleri](#sık-kullanılan-production-reçeteleri)
@@ -46,7 +47,7 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Yerel geliştirme için Windows x64 veya GLIBC 2.17 ve üzeri Linux x64
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.2.1`.
+Güncel sürüm: `0.3.0`.
 
 ## Hızlı Başlangıç
 
@@ -86,7 +87,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.2.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.3.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -183,12 +184,12 @@ public interface StoreQueryService {
 
 ### 4. Consumer Oluşturun
 
-Bildik Dubbo annotation kullanımı değişmez:
+Reactor'a ait annotation'ları kullanın. Bu package ayrımı, kademeli geçiş sırasında Apache ve Rust sınıflarını net biçimde ayırır:
 
 ```java
 package com.example.store.consumer;
 
-import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
+import com.reactor.rust.dubbo.annotation.EnableDubbo;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -206,7 +207,7 @@ package com.example.store.consumer;
 
 import com.example.store.api.StoreQueryService;
 import com.example.store.api.StoreView;
-import org.apache.dubbo.config.annotation.DubboReference;
+import com.reactor.rust.dubbo.annotation.DubboReference;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -239,7 +240,7 @@ package com.example.store.provider;
 
 import com.example.store.api.StoreQueryService;
 import com.example.store.api.StoreView;
-import org.apache.dubbo.config.annotation.DubboService;
+import com.reactor.rust.dubbo.annotation.DubboService;
 
 @DubboService(
     interfaceClass = StoreQueryService.class,
@@ -277,6 +278,24 @@ Generator; Spring bean kaydını, tip güvenli dispatcher'ı, method ID'lerini v
 mvn -U clean package
 java -jar target/uygulamaniz.jar
 ```
+
+## Annotation Package ve 0.3 Geçişi
+
+`0.3.0` sürümü tek bir kalıcı package kullanır:
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboReference;
+import com.reactor.rust.dubbo.annotation.DubboService;
+import com.reactor.rust.dubbo.annotation.EnableDubbo;
+```
+
+`0.2.x` sürümünden geçerken bu import'ları ve Maven sürümünü değiştirin. Controller, business service, contract, DTO, route property ve native ayarlar değişmez.
+
+Starter, `org.apache.dubbo.*` altında sınıf getirmez. Bu bilinçli bir karardır. Mevcut resmî Apache provider değişmeden kalabilir. Yeni Rust consumer ise kalıcı Reactor annotation'ını kullanır. Varsayılan build sırasında Reactor codegen, resmî Apache annotation'larını işlemez.
+
+Büyük bir uygulamada eski import'lar hemen değiştirilemiyorsa isteğe bağlı `java-rust-dubbo-apache-compat-annotations` dependency'sini ekleyin. Ardından `maven-compiler-plugin` içine `-Areactor.dubbo.apacheCompatibility=true`, enhancer plugin içine `<apacheCompatibility>true</apacheCompatibility>` yazın. Bu seçeneği geçici migration modu olarak değerlendirin.
+
+Gerçek Apache Dubbo annotation'larını hâlâ içeren bir uygulamada uyumluluk modunu açmayın. Bu mod eski package'ı bilerek işler. Eski Reactor shim'i ile gerçek Apache servisini ayıramaz. Yalnızca dönüştürdüğünüz sınıflarda kalıcı Reactor import'larını kullanın.
 
 Spring Boot Actuator varsa kütüphane `rustDubboHealthIndicator` bean'ini ekler. `/actuator/health` üzerinden kontrol edebilirsiniz. Detaylarda seçilen profil, consumer ve provider hazırlık durumu ile native metrikler bulunur.
 

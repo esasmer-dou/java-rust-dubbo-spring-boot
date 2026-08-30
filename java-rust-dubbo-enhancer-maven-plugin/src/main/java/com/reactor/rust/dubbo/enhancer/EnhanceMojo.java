@@ -16,6 +16,9 @@ public final class EnhanceMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true, required = true)
     private java.io.File classesDirectory;
 
+    @Parameter(property = "reactor.dubbo.apacheCompatibility", defaultValue = "false")
+    private boolean apacheCompatibility;
+
     @Override
     public void execute() throws MojoExecutionException {
         Path root = classesDirectory.toPath();
@@ -27,7 +30,7 @@ public final class EnhanceMojo extends AbstractMojo {
             List<Path> classes = paths.filter(path -> path.toString().endsWith(".class")).toList();
             for (Path path : classes) {
                 byte[] original = Files.readAllBytes(path);
-                byte[] transformed = ReferenceFieldEnhancer.enhance(original);
+                byte[] transformed = ReferenceFieldEnhancer.enhance(original, apacheCompatibility);
                 if (transformed != original) {
                     Path staging = path.resolveSibling(path.getFileName() + ".staging");
                     Files.write(staging, transformed);
@@ -38,6 +41,10 @@ public final class EnhanceMojo extends AbstractMojo {
             }
         } catch (IOException exception) {
             throw new MojoExecutionException("Failed to enhance @DubboReference fields", exception);
+        }
+        if (apacheCompatibility) {
+            getLog().warn("Apache annotation compatibility is enabled; use canonical Reactor annotations "
+                    + "for mixed Apache/Reactor applications");
         }
         getLog().info("Reflection-free Dubbo injection enhanced " + enhanced + " class(es)");
     }

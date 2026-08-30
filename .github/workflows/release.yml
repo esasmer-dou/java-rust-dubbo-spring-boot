@@ -90,19 +90,19 @@ jobs:
           notes="$(cat <<'EOF'
           ## What's New
 
-          Conditional consumers now stay fully inactive when Spring does not create the bean that uses them. A reference behind `@ConditionalOnProperty` or a Spring profile opens no native connection and needs no route while that bean is disabled.
+          Framework annotations now use the Reactor-owned `com.reactor.rust.dubbo.annotation` package. The starter no longer contributes classes under `org.apache.dubbo.*`, so official Apache providers and newly migrated Rust consumers can coexist without duplicate annotation classes or accidental code generation.
 
-          Generated client definitions remain reflection-free. The native client is created once when an active reference is first injected. Active references keep strict route and readiness checks, so configuration errors still stop startup before traffic is accepted.
+          Upgrade by changing the framework version to `0.3.0` and replacing the three annotation imports. Controllers, business services, contracts, DTOs, route properties, and native settings stay the same. Codegen and field enhancement remain build-time and reflection-free.
 
-          Application annotations, business services, native ABI `3`, and the Dubbo wire contract are unchanged. See the README's Conditional References section for a copy-paste example.
+          A separate `java-rust-dubbo-apache-compat-annotations` artifact is available for temporary old-import migration and must be enabled explicitly. Native ABI remains `3`, and the Dubbo wire contract is unchanged.
 
           ## Yenilikler
 
-          Spring ilgili bean'i oluşturmadığında koşullu consumer artık tamamen kapalı kalır. `@ConditionalOnProperty` veya Spring profili arkasındaki reference, bean kapalıyken native connection açmaz ve route istemez.
+          Framework annotation'ları artık Reactor'a ait `com.reactor.rust.dubbo.annotation` package'ını kullanır. Starter, `org.apache.dubbo.*` altında sınıf getirmez. Böylece resmî Apache provider ile yeni Rust consumer aynı geçiş sürecinde duplicate annotation sınıfı veya yanlış codegen riski olmadan çalışabilir.
 
-          Generated client tanımları reflection kullanmadan hazırlanır. Native client, aktif reference ilk kez enjekte edilirken bir kez oluşturulur. Aktif reference'lar strict route ve readiness kontrollerini korur. Yapılandırma hataları trafik başlamadan önce startup'ı durdurur.
+          Geçiş için framework sürümünü `0.3.0` yapın ve üç annotation import'unu değiştirin. Controller, business service, contract, DTO, route property ve native ayarlar aynı kalır. Codegen ve field enhancement build sırasında, reflection kullanmadan çalışmaya devam eder.
 
-          Uygulama annotation'ları, business service kodu, native ABI `3` ve Dubbo wire contract değişmez. Kopyalanabilir örnek için README içindeki Koşullu Reference Kullanımı bölümüne bakın.
+          Eski import'ların geçici kullanımı için ayrı `java-rust-dubbo-apache-compat-annotations` artifact'ı bulunur ve açıkça etkinleştirilmesi gerekir. Native ABI `3` ve Dubbo wire contract değişmez.
           EOF
           )"
           gh release create "$GITHUB_REF_NAME" release-assets/* \

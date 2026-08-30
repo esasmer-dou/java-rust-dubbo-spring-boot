@@ -7,6 +7,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * Optional migration surface. New code should use
+ * {@code com.reactor.rust.dubbo.annotation.EnableDubbo}.
+ */
+@Deprecated(since = "0.3.0", forRemoval = false)
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.CLASS)
 @Inherited

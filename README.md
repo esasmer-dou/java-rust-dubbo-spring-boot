@@ -9,6 +9,7 @@ The public package contains the Java API and verified Windows/Linux native artif
 ## Contents
 
 - [Quick start](#quick-start)
+- [Annotation package and 0.3 upgrade](#annotation-package-and-03-upgrade)
 - [Choose a profile](#choose-a-profile)
 - [Critical runtime limits](#critical-runtime-limits)
 - [Production recipes](#common-production-recipes)
@@ -46,7 +47,7 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64 for local development, or Linux x64 with GLIBC 2.17 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.2.1`.
+Current release: `0.3.0`.
 
 ## Quick Start
 
@@ -86,7 +87,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.2.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.3.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -183,12 +184,12 @@ public interface StoreQueryService {
 
 ### 4. Create The Consumer
 
-The familiar Dubbo annotations stay in place:
+Use the Reactor-owned annotations. They keep Apache and Rust classes unambiguous during a gradual migration:
 
 ```java
 package com.example.store.consumer;
 
-import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
+import com.reactor.rust.dubbo.annotation.EnableDubbo;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -206,7 +207,7 @@ package com.example.store.consumer;
 
 import com.example.store.api.StoreQueryService;
 import com.example.store.api.StoreView;
-import org.apache.dubbo.config.annotation.DubboReference;
+import com.reactor.rust.dubbo.annotation.DubboReference;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -239,7 +240,7 @@ package com.example.store.provider;
 
 import com.example.store.api.StoreQueryService;
 import com.example.store.api.StoreView;
-import org.apache.dubbo.config.annotation.DubboService;
+import com.reactor.rust.dubbo.annotation.DubboService;
 
 @DubboService(
     interfaceClass = StoreQueryService.class,
@@ -277,6 +278,24 @@ The generator creates the Spring bean registration, typed dispatcher, method IDs
 mvn -U clean package
 java -jar target/your-application.jar
 ```
+
+## Annotation Package And 0.3 Upgrade
+
+Version `0.3.0` uses one canonical package:
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboReference;
+import com.reactor.rust.dubbo.annotation.DubboService;
+import com.reactor.rust.dubbo.annotation.EnableDubbo;
+```
+
+When upgrading from `0.2.x`, change these imports and the Maven version. Controllers, business services, contracts, DTOs, route properties, and native settings do not change.
+
+The starter does not bring classes under `org.apache.dubbo.*`. This is intentional. An existing official Apache provider can remain unchanged while a new Rust consumer uses the canonical Reactor annotation. Official Apache annotations are ignored by Reactor codegen in the default build.
+
+If a large application cannot change old imports immediately, add the optional `java-rust-dubbo-apache-compat-annotations` dependency. Then set `-Areactor.dubbo.apacheCompatibility=true` in `maven-compiler-plugin` and `<apacheCompatibility>true</apacheCompatibility>` in the enhancer plugin. Treat this as a temporary migration mode.
+
+Do not enable compatibility mode in an application that still contains real Apache Dubbo annotations. That mode deliberately processes the old package and cannot distinguish an old Reactor shim from a real Apache service. Use canonical Reactor imports on only the classes you migrate.
 
 If Spring Boot Actuator is present, the library contributes `rustDubboHealthIndicator`. Check it through `/actuator/health`. The details include the selected profile, client readiness, provider readiness, and native metrics.
 

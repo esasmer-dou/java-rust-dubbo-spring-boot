@@ -6,7 +6,7 @@
   <parent>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo-spring-boot-parent</artifactId>
-    <version>0.2.1</version>
+    <version>0.3.0</version>
   </parent>
   <artifactId>java-rust-dubbo-spring-boot-starter</artifactId>
   <name>Java Rust Dubbo Spring Boot Starter</name>
@@ -44,6 +44,11 @@
       <artifactId>jackson-annotations</artifactId>
       <scope>provided</scope>
       <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

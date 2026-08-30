@@ -26,9 +26,14 @@ import javax.tools.Diagnostic;
 import javax.tools.StandardLocation;
 
 public final class RustDubboProcessor extends AbstractProcessor {
-    private static final String REFERENCE = "org.apache.dubbo.config.annotation.DubboReference";
-    private static final String SERVICE = "org.apache.dubbo.config.annotation.DubboService";
-    private static final String ENABLE = "org.apache.dubbo.config.spring.context.annotation.EnableDubbo";
+    static final String APACHE_COMPATIBILITY_OPTION = "reactor.dubbo.apacheCompatibility";
+    private static final String REFERENCE = "com.reactor.rust.dubbo.annotation.DubboReference";
+    private static final String SERVICE = "com.reactor.rust.dubbo.annotation.DubboService";
+    private static final String ENABLE = "com.reactor.rust.dubbo.annotation.EnableDubbo";
+    private static final String APACHE_REFERENCE = "org.apache.dubbo.config.annotation.DubboReference";
+    private static final String APACHE_SERVICE = "org.apache.dubbo.config.annotation.DubboService";
+    private static final String APACHE_ENABLE =
+            "org.apache.dubbo.config.spring.context.annotation.EnableDubbo";
 
     private final Map<String, ReferenceContract> references = new LinkedHashMap<>();
     private final Map<String, ServiceContract> services = new LinkedHashMap<>();
@@ -36,7 +41,12 @@ public final class RustDubboProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return Set.of(REFERENCE, SERVICE, ENABLE);
+        return Set.of(REFERENCE, SERVICE, ENABLE, APACHE_REFERENCE, APACHE_SERVICE, APACHE_ENABLE);
+    }
+
+    @Override
+    public Set<String> getSupportedOptions() {
+        return Set.of(APACHE_COMPATIBILITY_OPTION);
     }
 
     @Override
@@ -46,17 +56,9 @@ public final class RustDubboProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnvironment) {
-        TypeElement referenceType = processingEnv.getElementUtils().getTypeElement(REFERENCE);
-        TypeElement serviceType = processingEnv.getElementUtils().getTypeElement(SERVICE);
-        if (referenceType != null) {
-            for (Element element : roundEnvironment.getElementsAnnotatedWith(referenceType)) {
-                collectReference(element);
-            }
-        }
-        if (serviceType != null) {
-            for (Element element : roundEnvironment.getElementsAnnotatedWith(serviceType)) {
-                collectService(element);
-            }
+        collectAnnotated(roundEnvironment, REFERENCE, SERVICE);
+        if (apacheCompatibilityEnabled()) {
+            collectAnnotated(roundEnvironment, APACHE_REFERENCE, APACHE_SERVICE);
         }
         if (!roundEnvironment.processingOver() && !written
                 && (!references.isEmpty() || !services.isEmpty())) {
@@ -66,7 +68,28 @@ public final class RustDubboProcessor extends AbstractProcessor {
         return false;
     }
 
-    private void collectReference(Element element) {
+    private void collectAnnotated(RoundEnvironment roundEnvironment,
+                                  String referenceAnnotation, String serviceAnnotation) {
+        TypeElement referenceType = processingEnv.getElementUtils().getTypeElement(referenceAnnotation);
+        TypeElement serviceType = processingEnv.getElementUtils().getTypeElement(serviceAnnotation);
+        if (referenceType != null) {
+            for (Element element : roundEnvironment.getElementsAnnotatedWith(referenceType)) {
+                collectReference(element, referenceAnnotation);
+            }
+        }
+        if (serviceType != null) {
+            for (Element element : roundEnvironment.getElementsAnnotatedWith(serviceType)) {
+                collectService(element, serviceAnnotation);
+            }
+        }
+    }
+
+    private boolean apacheCompatibilityEnabled() {
+        return Boolean.parseBoolean(
+                processingEnv.getOptions().getOrDefault(APACHE_COMPATIBILITY_OPTION, "false"));
+    }
+
+    private void collectReference(Element element, String annotationName) {
         if (element.getKind() != ElementKind.FIELD) {
             error(element, "@DubboReference is supported on fields only in the reflection-free runtime");
             return;
@@ -85,7 +108,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
         TypeElement contract = (TypeElement) declared.asElement();
         String ownerName = processingEnv.getElementUtils().getBinaryName(owner).toString();
         String contractName = processingEnv.getElementUtils().getBinaryName(contract).toString();
-        AnnotationValues values = AnnotationValues.of(field, REFERENCE);
+        AnnotationValues values = AnnotationValues.of(field, annotationName);
         if (!values.rejectUnsupported(field, Set.of(
                 "interfaceClass", "interfaceName", "version", "group", "check"), processingEnv)) {
             return;
@@ -94,18 +117,22 @@ public final class RustDubboProcessor extends AbstractProcessor {
             return;
         }
         String key = ownerName + '#' + field.getSimpleName();
+        if (references.containsKey(key)) {
+            error(field, "Dubbo reference must use exactly one canonical or Apache-compat annotation");
+            return;
+        }
         references.put(key, new ReferenceContract(ownerName, field.getSimpleName().toString(), contractName,
                 values.string("group"), values.string("version"), values.bool("check", true),
                 contract, methods(contract)));
     }
 
-    private void collectService(Element element) {
+    private void collectService(Element element, String annotationName) {
         if (element.getKind() != ElementKind.CLASS) {
             error(element, "@DubboService is supported on implementation classes only");
             return;
         }
         TypeElement implementation = (TypeElement) element;
-        AnnotationValues values = AnnotationValues.of(implementation, SERVICE);
+        AnnotationValues values = AnnotationValues.of(implementation, annotationName);
         if (!values.rejectUnsupported(implementation, Set.of(
                 "interfaceClass", "interfaceName", "version", "group", "export", "async",
                 "executes", "executor"), processingEnv)) {
@@ -117,6 +144,11 @@ public final class RustDubboProcessor extends AbstractProcessor {
         }
         String implementationName = processingEnv.getElementUtils().getBinaryName(implementation).toString();
         String contractName = processingEnv.getElementUtils().getBinaryName(contract).toString();
+        if (services.containsKey(implementationName)) {
+            error(implementation,
+                    "Dubbo service must use exactly one canonical or Apache-compat annotation");
+            return;
+        }
         services.put(implementationName, new ServiceContract(implementationName, contractName,
                 values.string("group"), values.string("version"), values.string("executor"),
                 values.bool("async", false), values.bool("export", true), values.integer("executes", -1),

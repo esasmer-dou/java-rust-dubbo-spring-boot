@@ -13,6 +13,8 @@ import org.objectweb.asm.Type;
 
 final class ReferenceFieldEnhancer {
     private static final String REFERENCE_DESCRIPTOR =
+            "Lcom/reactor/rust/dubbo/annotation/DubboReference;";
+    private static final String APACHE_REFERENCE_DESCRIPTOR =
             "Lorg/apache/dubbo/config/annotation/DubboReference;";
     private static final String TARGET =
             "com/reactor/rust/dubbo/runtime/GeneratedDubboInjectionTarget";
@@ -22,7 +24,11 @@ final class ReferenceFieldEnhancer {
     }
 
     static byte[] enhance(byte[] original) {
-        Scan scan = new Scan();
+        return enhance(original, false);
+    }
+
+    static byte[] enhance(byte[] original, boolean apacheCompatibility) {
+        Scan scan = new Scan(apacheCompatibility);
         new ClassReader(original).accept(scan, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
         if (scan.references.isEmpty() || scan.alreadyEnhanced) {
             return original;
@@ -35,11 +41,13 @@ final class ReferenceFieldEnhancer {
 
     private static final class Scan extends ClassVisitor {
         private final List<ReferenceField> references = new ArrayList<>();
+        private final boolean apacheCompatibility;
         private String className;
         private boolean alreadyEnhanced;
 
-        private Scan() {
+        private Scan(boolean apacheCompatibility) {
             super(Opcodes.ASM9);
+            this.apacheCompatibility = apacheCompatibility;
         }
 
         @Override
@@ -59,7 +67,9 @@ final class ReferenceFieldEnhancer {
             return new FieldVisitor(Opcodes.ASM9) {
                 @Override
                 public AnnotationVisitor visitAnnotation(String annotationDescriptor, boolean visible) {
-                    if (!REFERENCE_DESCRIPTOR.equals(annotationDescriptor)) {
+                    if (!REFERENCE_DESCRIPTOR.equals(annotationDescriptor)
+                            && !(apacheCompatibility
+                            && APACHE_REFERENCE_DESCRIPTOR.equals(annotationDescriptor))) {
                         return null;
                     }
                     ReferenceField field = new ReferenceField(name, descriptor);
