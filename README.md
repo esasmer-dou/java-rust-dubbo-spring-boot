@@ -47,7 +47,7 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64 for local development, or Linux x64 with GLIBC 2.17 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.3.0`.
+Current release: `0.3.1`.
 
 ## Quick Start
 
@@ -87,7 +87,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.3.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.3.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -278,6 +278,12 @@ The generator creates the Spring bean registration, typed dispatcher, method IDs
 mvn -U clean package
 java -jar target/your-application.jar
 ```
+
+### NetBeans 17 And Java 21
+
+Use framework `0.3.1` or newer when the project is opened with NetBeans 17. Earlier code generators linked directly to a Java 21 compiler enum field that is absent from NetBeans 17's embedded parser model. Maven builds succeeded, but the IDE could mark valid `@DubboReference` classes as `Error parsing file`.
+
+After upgrading the Maven property, reload the Maven project and run **Clean and Build**. No source-code or annotation change is required.
 
 ## Annotation Package And 0.3 Upgrade
 

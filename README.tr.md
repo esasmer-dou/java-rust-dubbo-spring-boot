@@ -47,7 +47,7 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Yerel geliştirme için Windows x64 veya GLIBC 2.17 ve üzeri Linux x64
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.3.0`.
+Güncel sürüm: `0.3.1`.
 
 ## Hızlı Başlangıç
 
@@ -87,7 +87,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.3.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.3.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -278,6 +278,12 @@ Generator; Spring bean kaydını, tip güvenli dispatcher'ı, method ID'lerini v
 mvn -U clean package
 java -jar target/uygulamaniz.jar
 ```
+
+### NetBeans 17 ve Java 21
+
+Projeyi NetBeans 17 ile açıyorsanız framework `0.3.1` veya üzerini kullanın. Önceki code generator, NetBeans 17'nin gömülü parser modelinde bulunmayan Java 21 compiler alanına doğrudan bağlanıyordu. Maven build başarılı olsa bile IDE, geçerli `@DubboReference` sınıflarını `Error parsing file` olarak işaretleyebiliyordu.
+
+Maven property değerini yükselttikten sonra projeyi Maven üzerinden yeniden yükleyin ve **Clean and Build** çalıştırın. Kaynak kodda veya annotation kullanımında değişiklik gerekmez.
 
 ## Annotation Package ve 0.3 Geçişi
 

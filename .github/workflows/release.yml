@@ -90,19 +90,19 @@ jobs:
           notes="$(cat <<'EOF'
           ## What's New
 
-          Framework annotations now use the Reactor-owned `com.reactor.rust.dubbo.annotation` package. The starter no longer contributes classes under `org.apache.dubbo.*`, so official Apache providers and newly migrated Rust consumers can coexist without duplicate annotation classes or accidental code generation.
+          The build-time annotation processor now derives its supported Java source level from the active compiler model. This fixes false `Error parsing file` markers on valid `@DubboReference` classes in NetBeans 17 while Maven continues to compile with Java 21.
 
-          Upgrade by changing the framework version to `0.3.0` and replacing the three annotation imports. Controllers, business services, contracts, DTOs, route properties, and native settings stay the same. Codegen and field enhancement remain build-time and reflection-free.
+          Upgrade the framework version to `0.3.1`, reload the Maven project, and run Clean and Build. Controllers, business services, contracts, DTOs, annotations, route properties, and native settings stay the same. Codegen and field enhancement remain build-time and reflection-free.
 
-          A separate `java-rust-dubbo-apache-compat-annotations` artifact is available for temporary old-import migration and must be enabled explicitly. Native ABI remains `3`, and the Dubbo wire contract is unchanged.
+          Native ABI remains `3`, and the Dubbo wire contract is unchanged.
 
           ## Yenilikler
 
-          Framework annotation'ları artık Reactor'a ait `com.reactor.rust.dubbo.annotation` package'ını kullanır. Starter, `org.apache.dubbo.*` altında sınıf getirmez. Böylece resmî Apache provider ile yeni Rust consumer aynı geçiş sürecinde duplicate annotation sınıfı veya yanlış codegen riski olmadan çalışabilir.
+          Build sırasında çalışan annotation processor artık desteklediği Java source seviyesini aktif compiler modelinden alır. Böylece Maven Java 21 ile build almaya devam ederken NetBeans 17'nin geçerli `@DubboReference` sınıflarını yanlış şekilde `Error parsing file` olarak işaretlemesi giderilir.
 
-          Geçiş için framework sürümünü `0.3.0` yapın ve üç annotation import'unu değiştirin. Controller, business service, contract, DTO, route property ve native ayarlar aynı kalır. Codegen ve field enhancement build sırasında, reflection kullanmadan çalışmaya devam eder.
+          Framework sürümünü `0.3.1` yapın. Maven projesini yeniden yükleyin ve Clean and Build çalıştırın. Controller, business service, contract, DTO, annotation, route property ve native ayarlar aynı kalır. Codegen ve field enhancement build sırasında, reflection kullanmadan çalışmaya devam eder.
 
-          Eski import'ların geçici kullanımı için ayrı `java-rust-dubbo-apache-compat-annotations` artifact'ı bulunur ve açıkça etkinleştirilmesi gerekir. Native ABI `3` ve Dubbo wire contract değişmez.
+          Native ABI `3` ve Dubbo wire contract değişmez.
           EOF
           )"
           gh release create "$GITHUB_REF_NAME" release-assets/* \

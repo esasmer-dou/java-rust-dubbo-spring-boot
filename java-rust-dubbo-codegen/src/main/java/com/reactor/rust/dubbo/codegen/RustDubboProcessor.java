@@ -51,7 +51,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
 
     @Override
     public SourceVersion getSupportedSourceVersion() {
-        return SourceVersion.RELEASE_21;
+        return SourceVersion.latestSupported();
     }
 
     @Override
