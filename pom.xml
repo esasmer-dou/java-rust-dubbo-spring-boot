@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo-spring-boot-parent</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <packaging>pom</packaging>
 
   <name>Java Rust Dubbo Spring Boot</name>
@@ -55,7 +55,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <project.build.outputTimestamp>2026-08-29T09:47:57Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2026-08-30T16:40:38Z</project.build.outputTimestamp>
     <spring-boot.version>3.2.4</spring-boot.version>
     <asm.version>9.8</asm.version>
     <maven.version>3.9.9</maven.version>

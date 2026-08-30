@@ -168,19 +168,22 @@ final class GeneratedSourceWriter {
             boolean startupCheck = references.stream()
                     .filter(candidate -> clientKey(candidate).equals(clientKey(reference)))
                     .anyMatch(RustDubboProcessor.ReferenceContract::check);
-            line(source, "    int " + id + " = runtime.createClient(\"" + escape(reference.contract())
-                    + "\", \"" + escape(reference.group()) + "\", \""
-                    + escape(reference.version()) + "\", " + startupCheck + ");");
+            line(source, "    clients.registerFactory("
+                    + "new com.reactor.rust.dubbo.runtime.DubboClientKey(\""
+                    + escape(reference.contract()) + "\", \"" + escape(reference.group())
+                    + "\", \"" + escape(reference.version()) + "\"), () -> {");
+            line(source, "      int " + id + " = runtime.createClient(\""
+                    + escape(reference.contract()) + "\", \"" + escape(reference.group())
+                    + "\", \"" + escape(reference.version()) + "\", " + startupCheck + ");");
             for (RustDubboProcessor.MethodContract method : reference.methods()) {
-                line(source, "    runtime.registerMethod(" + id + ", " + method.id() + ", \""
+                line(source, "      runtime.registerMethod(" + id + ", " + method.id() + ", \""
                         + escape(method.name()) + "\", \"" + escape(method.descriptor()) + "\");");
             }
-            line(source, "    clients.register(new com.reactor.rust.dubbo.runtime.DubboClientKey(\""
+            line(source, "      return new " + clientClass(reference) + '(' + id
+                    + ", runtime.clientOptions(\""
                     + escape(reference.contract()) + "\", \"" + escape(reference.group())
-                    + "\", \"" + escape(reference.version()) + "\"), new "
-                    + clientClass(reference) + '(' + id + ", runtime.clientOptions(\""
-                    + escape(reference.contract()) + "\", \"" + escape(reference.group())
-                    + "\", \"" + escape(reference.version()) + "\")));");
+                    + "\", \"" + escape(reference.version()) + "\"));");
+            line(source, "    });");
         }
         line(source, "  }");
         line(source, "");

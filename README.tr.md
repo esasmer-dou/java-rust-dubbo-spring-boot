@@ -14,6 +14,7 @@ Public paket, Java API'sini ve doğrulanmış Windows/Linux native artifact'lar�
 - [Production reçeteleri](#sık-kullanılan-production-reçeteleri)
 - [ZooKeeper olmadan Kubernetes](#zookeeper-olmadan-kubernetes-kullanımı)
 - [Birden fazla provider uygulaması](#birden-fazla-provider-uygulaması)
+- [Koşullu reference kullanımı](#koşullu-reference-kullanımı)
 - [Desteklenen contract yapısı](#desteklenen-contract-yapısı)
 - [Tüm property'ler](#tüm-propertyler)
 - [Güvenli tuning](#güvenli-tuning-sırası)
@@ -45,7 +46,7 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Yerel geliştirme için Windows x64 veya GLIBC 2.17 ve üzeri Linux x64
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.2.0`.
+Güncel sürüm: `0.2.1`.
 
 ## Hızlı Başlangıç
 
@@ -85,7 +86,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.2.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.2.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -523,6 +524,32 @@ env:
       "order":{"interface-name":"com.example.order.OrderService","group":"sales",
       "version":"v2","providers":"order-provider.platform.svc.cluster.local:20880"}}}}}}
 ```
+
+## Koşullu Reference Kullanımı
+
+İsteğe bağlı bir entegrasyonu normal Spring koşuluyla kapatabilirsiniz:
+
+```java
+@Component
+@ConditionalOnProperty(name = "vehicle.express.enabled", havingValue = "true")
+public final class ExpressVehicleClient {
+    @DubboReference(group = "vehicle", version = "1.0")
+    private ExpressVehicleService service;
+}
+```
+
+`vehicle.express.enabled=false` olduğunda Spring bu bean'i oluşturmaz. Kütüphane de bu reference için native client açmaz, socket oluşturmaz ve tam route tanımı istemez.
+
+`vehicle.express.enabled=true` olduğunda native client, bean injection sırasında bir kez oluşturulur. Normal strict kontrol devam eder. `require-explicit-routes=true` kullanılıyorsa tam route'u ekleyin:
+
+```properties
+reactor.dubbo.consumer.routes.express.interface-name=com.example.ExpressVehicleService
+reactor.dubbo.consumer.routes.express.group=vehicle
+reactor.dubbo.consumer.routes.express.version=1.0
+reactor.dubbo.consumer.routes.express.providers=express-provider:20880
+```
+
+Aynı davranış Spring profiliyle kapatılan bean'ler için de geçerlidir. Bu akış runtime reflection veya çağrı başına route araması eklemez.
 
 ## Desteklenen Contract Yapısı
 

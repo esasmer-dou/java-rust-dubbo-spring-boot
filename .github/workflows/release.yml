@@ -90,23 +90,19 @@ jobs:
           notes="$(cat <<'EOF'
           ## What's New
 
-          A Spring Boot consumer can now connect different `@DubboReference` contracts to different provider applications. Configure an exact route for each `interface + group + version`; Java annotations and business services remain unchanged.
+          Conditional consumers now stay fully inactive when Spring does not create the bean that uses them. A reference behind `@ConditionalOnProperty` or a Spring profile opens no native connection and needs no route while that bean is disabled.
 
-          Route selection happens once at startup. Calls remain generated and reflection-free. Routes use separate bounded connections, queues, timeouts, payload limits, and in-flight budgets while sharing one small Rust Tokio runtime.
+          Generated client definitions remain reflection-free. The native client is created once when an active reference is first injected. Active references keep strict route and readiness checks, so configuration errors still stop startup before traffic is accepted.
 
-          Disconnected sockets are skipped when a healthy configured replica exists. If all replicas are unavailable, waiting remains bounded by the original RPC timeout. Sent business calls are never replayed automatically.
-
-          Production deployments should set `reactor.dubbo.consumer.require-explicit-routes=true`. See the README for complete properties, Kubernetes Service DNS examples, health details, and tuning guidance.
+          Application annotations, business services, native ABI `3`, and the Dubbo wire contract are unchanged. See the README's Conditional References section for a copy-paste example.
 
           ## Yenilikler
 
-          Bir Spring Boot consumer artık farklı `@DubboReference` contract'larını farklı provider uygulamalarına bağlayabilir. Her `interface + group + version` kimliği için tam route tanımlanır. Java annotation ve business service kodu değişmez.
+          Spring ilgili bean'i oluşturmadığında koşullu consumer artık tamamen kapalı kalır. `@ConditionalOnProperty` veya Spring profili arkasındaki reference, bean kapalıyken native connection açmaz ve route istemez.
 
-          Route seçimi startup sırasında bir kez yapılır. Çağrılar generated ve reflection-free kalır. Route'ların sınırlı connection, queue, timeout, payload ve in-flight bütçeleri ayrıdır. Hepsi aynı küçük Rust Tokio runtime'ını paylaşır.
+          Generated client tanımları reflection kullanmadan hazırlanır. Native client, aktif reference ilk kez enjekte edilirken bir kez oluşturulur. Aktif reference'lar strict route ve readiness kontrollerini korur. Yapılandırma hataları trafik başlamadan önce startup'ı durdurur.
 
-          Sağlıklı bir replica varsa kopuk socket seçilmez. Bütün replica'lar kapalıysa bekleme mevcut RPC timeout süresiyle sınırlı kalır. Gönderilmiş business çağrıları otomatik olarak tekrar gönderilmez.
-
-          Production ortamında `reactor.dubbo.consumer.require-explicit-routes=true` kullanın. Tüm property'ler, Kubernetes Service DNS örnekleri, health detayları ve tuning bilgileri README içinde bulunur.
+          Uygulama annotation'ları, business service kodu, native ABI `3` ve Dubbo wire contract değişmez. Kopyalanabilir örnek için README içindeki Koşullu Reference Kullanımı bölümüne bakın.
           EOF
           )"
           gh release create "$GITHUB_REF_NAME" release-assets/* \

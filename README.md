@@ -14,6 +14,7 @@ The public package contains the Java API and verified Windows/Linux native artif
 - [Production recipes](#common-production-recipes)
 - [Kubernetes without ZooKeeper](#kubernetes-without-zookeeper)
 - [Multiple provider applications](#multiple-provider-applications)
+- [Conditional references](#conditional-references)
 - [Supported contracts](#supported-contract-surface)
 - [Configuration reference](#configuration-reference)
 - [Safe tuning](#safe-tuning-order)
@@ -45,7 +46,7 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64 for local development, or Linux x64 with GLIBC 2.17 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.2.0`.
+Current release: `0.2.1`.
 
 ## Quick Start
 
@@ -85,7 +86,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.2.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.2.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -523,6 +524,32 @@ env:
       "order":{"interface-name":"com.example.order.OrderService","group":"sales",
       "version":"v2","providers":"order-provider.platform.svc.cluster.local:20880"}}}}}}
 ```
+
+## Conditional References
+
+You can keep an optional integration behind a normal Spring condition:
+
+```java
+@Component
+@ConditionalOnProperty(name = "vehicle.express.enabled", havingValue = "true")
+public final class ExpressVehicleClient {
+    @DubboReference(group = "vehicle", version = "1.0")
+    private ExpressVehicleService service;
+}
+```
+
+With `vehicle.express.enabled=false`, Spring does not create the bean. The library therefore opens no native client, creates no socket, and does not require an explicit route for that reference.
+
+With `vehicle.express.enabled=true`, the native client is created once during bean injection. Normal strict validation still applies. Add the exact route when `require-explicit-routes=true`:
+
+```properties
+reactor.dubbo.consumer.routes.express.interface-name=com.example.ExpressVehicleService
+reactor.dubbo.consumer.routes.express.group=vehicle
+reactor.dubbo.consumer.routes.express.version=1.0
+reactor.dubbo.consumer.routes.express.providers=express-provider:20880
+```
+
+This behavior also applies to beans controlled by Spring profiles. It does not add runtime reflection or per-call route lookup.
 
 ## Supported Contract Surface
 
