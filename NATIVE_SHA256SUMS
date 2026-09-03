@@ -1,4 +1,5 @@
-63d64f679a42d8408e20914de9770b7aaa88350c6da46b73eae6572e8cf19f25  java-rust-dubbo-native-windows-x64/src/main/resources/native/rust_dubbo-windows-x64.dll
-b708676b77e28121e00a9d78f2c23d241b747365b120b16a6207a28e129a3c22  java-rust-dubbo-native-linux-x64/src/main/resources/native/librust_dubbo-linux-x64.so
-937d224a689677518669a47a0fb4789b9abeed22aa90f643d35b70b479890373  NATIVE_SBOM.cdx.json
-9f1d05dbdef27b281fe120dc2f989fef0f0793d42b44e915115d192e62b1e3a9  NATIVE_CORE_SBOM.cdx.json
+7a934c20a30ce509a01ead50b81505f480c682d32a8690ff26542f009f359858  java-rust-dubbo-native-windows-x64/src/main/resources/native/rust_dubbo-windows-x64.dll
+cac0496fe6cc272d1a6557efd8a163459d7ce734d5a83762a5f32ff8c4aa1a20  java-rust-dubbo-native-linux-x64/src/main/resources/native/librust_dubbo-linux-x64.so
+9a5c0f5073cce1fb18e59a1f15efc39d588939fb670374ff663c5054ac1a0dc1  java-rust-dubbo-native-macos-aarch64/src/main/resources/native/librust_dubbo-macos-aarch64.dylib
+689f1740818c3bfa1e5b5f73951baf0d1bb654bb5d02900329d1cab5fc539d4c  NATIVE_SBOM.cdx.json
+984c40d04a4320ca9244832e80cfe4486fa34a708497f934835f8a4e0554ee10  NATIVE_CORE_SBOM.cdx.json

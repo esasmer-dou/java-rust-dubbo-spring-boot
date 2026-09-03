@@ -4,11 +4,12 @@
 
 Spring Boot 3 için reflection kullanmayan bir Dubbo consumer ve provider kütüphanesidir. İş mantığı Java'da kalır. Küçük bir Rust native veri düzlemi; TCP bağlantılarını, Dubbo paketlerini, zaman aşımlarını, heartbeat işlemlerini, backpressure kontrolünü ve provider iletişimini yönetir.
 
-Public paket, Java API'sini ve doğrulanmış Windows/Linux native artifact'larını içerir. Rust kaynak kodu ayrı bir private repoda tutulur.
+Public paket, Java API'sini ve doğrulanmış Windows, Linux ve Apple Silicon macOS native artifact'larını içerir. Rust kaynak kodu ayrı bir private repoda tutulur.
 
 ## İçindekiler
 
 - [Hızlı başlangıç](#hızlı-başlangıç)
+- [Apple Silicon macOS](#apple-silicon-macos)
 - [Annotation package ve 0.3 geçişi](#annotation-package-ve-03-geçişi)
 - [Profil seçimi](#profil-seçimi)
 - [Kritik runtime limitleri](#kritik-runtime-limitleri)
@@ -44,10 +45,14 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Java 21
 - Spring Boot 3; sürüm 3.2.4 ile doğrulanmıştır
 - Maven 3.9 veya üzeri
-- Yerel geliştirme için Windows x64 veya GLIBC 2.17 ve üzeri Linux x64
+- Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.3.1`.
+Güncel sürüm: `0.4.0`.
+
+### 0.4.0 Sürümünde Ne Değişti?
+
+`0.4.0`, Apple Silicon Mac bilgisayarlar için native Maven artifact'ı ekler. Spring annotation'ları, üretilen client'lar, provider dispatcher'ları, property adları, wire protocol ve native ABI değişmez.
 
 ## Hızlı Başlangıç
 
@@ -87,7 +92,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.3.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.4.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -162,7 +167,39 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 </build>
 ```
 
-Windows x64 kullanıyorsanız `java-rust-dubbo-native-linux-x64` yerine `java-rust-dubbo-native-windows-x64` yazın. Her deployment içinde yalnızca bir platform artifact'ı bulunsun.
+JVM'in çalıştığı makineye göre yalnızca bir native artifact seçin:
+
+| Çalışma ortamı | Native artifact |
+|---|---|
+| Linux x64, GLIBC 2.17+ | `java-rust-dubbo-native-linux-x64` |
+| Windows x64 | `java-rust-dubbo-native-windows-x64` |
+| Apple Silicon macOS 11+ | `java-rust-dubbo-native-macos-aarch64` |
+
+Aynı deployment içine birden fazla native artifact eklemeyin.
+
+## Apple Silicon macOS
+
+M1, M2, M3, M4 veya daha yeni Apple Silicon donanımda ARM64 Java 21 JDK kullanın. Linux veya Windows artifact'ı yerine şu runtime dependency'sini ekleyin:
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-dubbo-native-macos-aarch64</artifactId>
+  <version>${java-rust-dubbo.version}</version>
+  <scope>runtime</scope>
+</dependency>
+```
+
+Makinenin ve JVM'in ARM64 olduğunu kontrol edin:
+
+```bash
+uname -m
+java -XshowSettings:properties -version 2>&1 | grep os.arch
+```
+
+`uname` çıktısı `arm64` olmalıdır. Java çıktısı `aarch64` veya `arm64` olmalıdır. JVM `x86_64` gösteriyorsa Rosetta üzerinden çalışıyordur ve bu artifact'ı yükleyemez. Bu modül Intel Mac bilgisayarları desteklemez.
+
+Dylib, GitHub tarafından sağlanan gerçek Apple Silicon runner üzerinde `MACOSX_DEPLOYMENT_TARGET=11.0` ile üretilir. CI; ARM64 Mach-O mimarisini, macOS 11 minimum sürümünü, yalnızca sistem dinamik bağımlılıklarını, kod imzasını ve JNI ABI değerini yayından önce doğrular. Bu dosya iOS için değil, macOS üzerinde çalışan masaüstü JVM uygulamaları içindir. Runtime dosyayı `~/.java-rust-dubbo/native/<hash>/` altına çıkarır ve tekrar kullanır.
 
 ### 3. Ortak Contract Oluşturun
 
@@ -759,7 +796,8 @@ Yukarıdaki üç biçim scalar property'ler için geçerlidir. İsimli route map
 |---|---|
 | Maven `401` döndürüyor | Token tanımlı, `read:packages` yetkili ve server ID tam olarak `github` olmalı |
 | Maven `403` veya `404` döndürüyor | Token sahibinin repo ve package erişimi olmalı |
-| Native library yüklenmiyor | İşletim sistemine uygun yalnızca bir native artifact bulunmalı |
+| Native library yüklenmiyor | Windows x64, Linux x64 veya macOS ARM64 ortamına uyan yalnızca bir native artifact bulunmalı |
+| macOS desteklenmeyen platform hatası veriyor | ARM64 Java 21 JDK kullanın; Rosetta ile çalışan `x86_64` JDK uyumlu değildir |
 | Başlangıçta provider bulunamıyor | Provider adresi, portu, readiness durumu ve startup timeout doğru olmalı |
 | Build annotation alanını reddediyor | Yalnızca yukarıdaki desteklenen annotation alanlarını kullanın |
 | Generated client veya injection oluşmuyor | Annotation processor ve enhancer plugin `mvn package` sırasında çalışmalı |
@@ -769,6 +807,6 @@ Yukarıdaki üç biçim scalar property'ler için geçerlidir. İsimli route map
 
 ## Bütünlük ve Lisans
 
-Release dosyalarında Windows/Linux native binary'leri, SHA-256 checksum ve CycloneDX SBOM bulunur. `NATIVE_SHA256SUMS`, dağıtılan artifact'ları doğrular. Native binary içindeki üçüncü taraf bileşenler `THIRD_PARTY_NOTICES` ve SBOM dosyalarında listelenir.
+Release dosyalarında Windows DLL, Linux SO, Apple Silicon macOS dylib, SHA-256 checksum ve CycloneDX SBOM bulunur. `NATIVE_SHA256SUMS`, dağıtılan artifact'ları doğrular. Native binary içindeki üçüncü taraf bileşenler `THIRD_PARTY_NOTICES` ve SBOM dosyalarında listelenir.
 
 Public Java kaynakları Apache License 2.0 ile lisanslanmıştır. Yayınlanan package ve native dosyaları için [Releases](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/releases) sayfasını kullanın.

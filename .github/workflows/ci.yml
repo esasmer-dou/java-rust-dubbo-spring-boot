@@ -121,3 +121,63 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           java -cp "$cp;$env:RUNNER_TEMP" NativeSmoke
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  macos-arm64:
+    name: macOS ARM64 native gate
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Temurin Java 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          architecture: aarch64
+          cache: maven
+      - name: Verify Apple Silicon runtime and native artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(uname -m)" == 'arm64' ]] || { echo "Expected Apple Silicon runner"; exit 1; }
+          java_arch="$(java -XshowSettings:properties -version 2>&1 | awk -F'= ' '/^[[:space:]]*os.arch =/{print $2; exit}')"
+          [[ "$java_arch" == 'aarch64' || "$java_arch" == 'arm64' ]] || { echo "Expected ARM64 JDK, found: $java_arch"; exit 1; }
+          binary='java-rust-dubbo-native-macos-aarch64/src/main/resources/native/librust_dubbo-macos-aarch64.dylib'
+          [[ "$(lipo -archs "$binary")" == 'arm64' ]] || { echo 'Invalid Mach-O architecture'; exit 1; }
+          minimum="$(otool -l "$binary" | awk '/minos/{print $2; exit}')"
+          [[ -n "$minimum" ]] || { echo 'Missing macOS deployment target'; exit 1; }
+          python3 - "$minimum" <<'PY'
+          import sys
+          value = tuple(map(int, (sys.argv[1].split('.') + ['0', '0'])[:3]))
+          if value > (11, 0, 0):
+              raise SystemExit(f'macOS deployment target is too new: {sys.argv[1]}')
+          PY
+          install_name="$(otool -D "$binary" | tail -n +2 | sed '/^[[:space:]]*$/d' | head -1 | xargs)"
+          unexpected="$(otool -L "$binary" | tail -n +2 | awk '{print $1}' | grep -v -F -x "$install_name" | grep -E -v '^(/usr/lib/|/System/Library/)' || true)"
+          [[ -z "$unexpected" ]] || { echo "Non-system dependencies: $unexpected"; exit 1; }
+          codesign --verify --strict "$binary"
+          expected="$(awk -v path="$binary" '$2 == path {print $1}' NATIVE_SHA256SUMS)"
+          actual="$(shasum -a 256 "$binary" | awk '{print $1}')"
+          [[ -n "$expected" && "$actual" == "$expected" ]] || { echo 'macOS checksum mismatch'; exit 1; }
+      - name: Build production modules
+        run: mvn -B -ntp clean verify
+      - name: Load macOS native library and verify ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/NativeSmoke.java" <<'JAVA'
+          import com.reactor.rust.dubbo.runtime.NativeDubboBridge;
+          public final class NativeSmoke {
+              public static void main(String[] args) {
+                  NativeDubboBridge.ensureLoaded();
+                  String metrics = NativeDubboBridge.metricsJson();
+                  if (metrics == null || !metrics.startsWith("{")) {
+                      throw new IllegalStateException("Native metrics are unavailable");
+                  }
+              }
+          }
+          JAVA
+          version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          cp="java-rust-dubbo-runtime/target/java-rust-dubbo-runtime-$version.jar:java-rust-dubbo-native-macos-aarch64/target/java-rust-dubbo-native-macos-aarch64-$version.jar"
+          javac -cp "$cp" -d "$RUNNER_TEMP" "$RUNNER_TEMP/NativeSmoke.java"
+          java -cp "$cp:$RUNNER_TEMP" NativeSmoke

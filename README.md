@@ -4,11 +4,12 @@
 
 A reflection-free Dubbo consumer and provider for Spring Boot 3. Java keeps the business logic. A small Rust native data plane handles TCP connections, Dubbo framing, timeouts, heartbeats, backpressure, and provider I/O.
 
-The public package contains the Java API and verified Windows/Linux native artifacts. Rust source is maintained in a separate private repository.
+The public package contains the Java API and verified Windows, Linux, and Apple Silicon macOS native artifacts. Rust source is maintained in a separate private repository.
 
 ## Contents
 
 - [Quick start](#quick-start)
+- [Apple Silicon macOS](#apple-silicon-macos)
 - [Annotation package and 0.3 upgrade](#annotation-package-and-03-upgrade)
 - [Choose a profile](#choose-a-profile)
 - [Critical runtime limits](#critical-runtime-limits)
@@ -44,10 +45,14 @@ Use this library when provider addresses are static or available through Kuberne
 - Java 21
 - Spring Boot 3; version 3.2.4 is verified
 - Maven 3.9 or newer
-- Windows x64 for local development, or Linux x64 with GLIBC 2.17 or newer
+- Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.3.1`.
+Current release: `0.4.0`.
+
+### What Changed In 0.4.0
+
+Version `0.4.0` adds a native Maven artifact for Apple Silicon Macs. The Spring annotations, generated clients, provider dispatchers, configuration keys, wire protocol, and native ABI remain unchanged.
 
 ## Quick Start
 
@@ -87,7 +92,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.3.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.4.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -162,7 +167,39 @@ Add the repository, starter, code generator, one native platform artifact, and b
 </build>
 ```
 
-For Windows x64, replace `java-rust-dubbo-native-linux-x64` with `java-rust-dubbo-native-windows-x64`. Add exactly one platform artifact to each deployment.
+Choose exactly one native artifact for the machine that runs the JVM:
+
+| Runtime | Native artifact |
+|---|---|
+| Linux x64, GLIBC 2.17+ | `java-rust-dubbo-native-linux-x64` |
+| Windows x64 | `java-rust-dubbo-native-windows-x64` |
+| Apple Silicon macOS 11+ | `java-rust-dubbo-native-macos-aarch64` |
+
+Do not package multiple native artifacts in one deployment.
+
+## Apple Silicon macOS
+
+Use an ARM64 Java 21 JDK on M1, M2, M3, M4, or newer Apple Silicon hardware. Add this runtime dependency instead of the Linux or Windows artifact:
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-dubbo-native-macos-aarch64</artifactId>
+  <version>${java-rust-dubbo.version}</version>
+  <scope>runtime</scope>
+</dependency>
+```
+
+Confirm that both the machine and JVM are ARM64:
+
+```bash
+uname -m
+java -XshowSettings:properties -version 2>&1 | grep os.arch
+```
+
+Expected values are `arm64` from `uname` and `aarch64` or `arm64` from Java. An `x86_64` JVM is running through Rosetta and cannot load this artifact. Intel Macs are not supported by this module.
+
+The dylib is built on a GitHub-hosted Apple Silicon runner with `MACOSX_DEPLOYMENT_TARGET=11.0`. CI verifies its ARM64 Mach-O architecture, macOS 11 minimum version, system-only dynamic dependencies, code signature, and JNI ABI before publication. This is a macOS desktop JVM library, not an iOS library. The runtime extracts it to `~/.java-rust-dubbo/native/<hash>/` and reuses it.
 
 ### 3. Define A Shared Contract
 
@@ -759,7 +796,8 @@ The three forms above apply to scalar properties. Use YAML/properties, a mounted
 |---|---|
 | Maven returns `401` | Token exists, has `read:packages`, and server ID is exactly `github` |
 | Maven returns `403` or `404` | Token owner can access the repository and package |
-| Native library cannot load | Exactly one correct Windows/Linux native artifact is present |
+| Native library cannot load | Exactly one native artifact matching Windows x64, Linux x64, or macOS ARM64 is present |
+| macOS reports an unsupported platform | Use an ARM64 Java 21 JDK; an `x86_64` JDK runs through Rosetta and is not compatible |
 | Startup reports provider unavailable | Provider address, port, readiness, and startup timeout are correct |
 | Build rejects an annotation option | Use only the supported annotation subset listed above |
 | Generated client or injection is missing | Annotation processor and enhancer plugin both ran during `mvn package` |
@@ -769,6 +807,6 @@ The three forms above apply to scalar properties. Use YAML/properties, a mounted
 
 ## Integrity And License
 
-Release assets include Windows/Linux native binaries, SHA-256 checksums, and CycloneDX SBOMs. `NATIVE_SHA256SUMS` pins the distributed artifacts. Third-party native components are listed in `THIRD_PARTY_NOTICES` and the SBOM files.
+Release assets include Windows DLL, Linux SO, Apple Silicon macOS dylib, SHA-256 checksums, and CycloneDX SBOMs. `NATIVE_SHA256SUMS` pins the distributed artifacts. Third-party native components are listed in `THIRD_PARTY_NOTICES` and the SBOM files.
 
 The public Java source is licensed under Apache License 2.0. See [Releases](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/releases) for published packages and native assets.

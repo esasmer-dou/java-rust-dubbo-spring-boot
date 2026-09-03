@@ -67,6 +67,8 @@ jobs:
           </project>
           EOF
           mvn -B -ntp -U -Dmaven.repo.local="$RUNNER_TEMP/empty-m2" -f "$RUNNER_TEMP/package-smoke/pom.xml" dependency:go-offline
+          mvn -B -ntp -U -Dmaven.repo.local="$RUNNER_TEMP/empty-m2" \
+            dependency:get -Dartifact="com.reactor:java-rust-dubbo-native-macos-aarch64:$version"
       - name: Generate release assets
         shell: bash
         run: |
@@ -78,6 +80,7 @@ jobs:
           mkdir -p release-assets
           cp java-rust-dubbo-native-windows-x64/src/main/resources/native/rust_dubbo-windows-x64.dll release-assets/
           cp java-rust-dubbo-native-linux-x64/src/main/resources/native/librust_dubbo-linux-x64.so release-assets/
+          cp java-rust-dubbo-native-macos-aarch64/src/main/resources/native/librust_dubbo-macos-aarch64.dylib release-assets/
           cp NATIVE_SBOM.cdx.json "release-assets/rust-dubbo-native-$version-sbom.json"
           cp NATIVE_CORE_SBOM.cdx.json "release-assets/rust-dubbo-core-$version-sbom.json"
           cp "target/java-rust-dubbo-spring-boot-$version-maven-sbom.json" release-assets/
@@ -90,19 +93,19 @@ jobs:
           notes="$(cat <<'EOF'
           ## What's New
 
-          The build-time annotation processor now derives its supported Java source level from the active compiler model. This fixes false `Error parsing file` markers on valid `@DubboReference` classes in NetBeans 17 while Maven continues to compile with Java 21.
+          Version `0.4.0` adds native Apple Silicon macOS support. Applications running on M1, M2, M3, M4, or newer Macs can now use `java-rust-dubbo-native-macos-aarch64` with an ARM64 Java 21 JDK.
 
-          Upgrade the framework version to `0.3.1`, reload the Maven project, and run Clean and Build. Controllers, business services, contracts, DTOs, annotations, route properties, and native settings stay the same. Codegen and field enhancement remain build-time and reflection-free.
+          The dylib is built and tested on a GitHub-hosted Apple Silicon runner. The release gate verifies ARM64 architecture, the macOS 11 deployment target, system-only dynamic dependencies, code signing, and JNI loading.
 
-          Native ABI remains `3`, and the Dubbo wire contract is unchanged.
+          Upgrade the framework version to `0.4.0` and select exactly one native artifact for the target operating system. Controllers, business services, contracts, DTOs, annotations, route properties, the Dubbo wire contract, and native ABI `3` remain unchanged.
 
           ## Yenilikler
 
-          Build sırasında çalışan annotation processor artık desteklediği Java source seviyesini aktif compiler modelinden alır. Böylece Maven Java 21 ile build almaya devam ederken NetBeans 17'nin geçerli `@DubboReference` sınıflarını yanlış şekilde `Error parsing file` olarak işaretlemesi giderilir.
+          `0.4.0`, Apple Silicon macOS desteği ekler. M1, M2, M3, M4 veya daha yeni Mac bilgisayarlarda çalışan uygulamalar, ARM64 Java 21 JDK ile `java-rust-dubbo-native-macos-aarch64` artifact'ını kullanabilir.
 
-          Framework sürümünü `0.3.1` yapın. Maven projesini yeniden yükleyin ve Clean and Build çalıştırın. Controller, business service, contract, DTO, annotation, route property ve native ayarlar aynı kalır. Codegen ve field enhancement build sırasında, reflection kullanmadan çalışmaya devam eder.
+          Dylib, GitHub tarafından sağlanan Apple Silicon runner üzerinde üretilir ve test edilir. Release gate; ARM64 mimarisini, macOS 11 deployment target değerini, yalnızca sistem dinamik bağımlılıklarını, kod imzasını ve JNI yüklemesini doğrular.
 
-          Native ABI `3` ve Dubbo wire contract değişmez.
+          Framework sürümünü `0.4.0` yapın ve hedef işletim sistemi için yalnızca bir native artifact seçin. Controller, business service, contract, DTO, annotation, route property, Dubbo wire contract ve native ABI `3` değişmez.
           EOF
           )"
           gh release create "$GITHUB_REF_NAME" release-assets/* \

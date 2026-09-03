@@ -8,6 +8,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Locale;
 
 final class NativeLibraryLoader {
     private static final String EXPLICIT_PATH = "reactor.dubbo.native.path";
@@ -46,18 +47,32 @@ final class NativeLibraryLoader {
     }
 
     private static String resourceName() {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        String arch = System.getProperty("os.arch", "").toLowerCase();
-        if (!arch.contains("64") && !arch.equals("amd64") && !arch.equals("x86_64")) {
-            throw new DubboNativeException("Only x64 native Dubbo binaries are supported: " + arch);
+        return resourceName(System.getProperty("os.name", ""), System.getProperty("os.arch", ""));
+    }
+
+    static String resourceName(String operatingSystem, String architecture) {
+        String os = operatingSystem.toLowerCase(Locale.ROOT);
+        String arch = architecture.toLowerCase(Locale.ROOT);
+        if ((os.contains("mac") || os.contains("darwin")) && isArm64(arch)) {
+            return "/native/librust_dubbo-macos-aarch64.dylib";
         }
-        if (os.contains("win")) {
+        if (os.contains("win") && isX64(arch)) {
             return "/native/rust_dubbo-windows-x64.dll";
         }
-        if (os.contains("linux")) {
+        if (os.contains("linux") && isX64(arch)) {
             return "/native/librust_dubbo-linux-x64.so";
         }
-        throw new DubboNativeException("Unsupported operating system: " + os);
+        throw new DubboNativeException(
+                "Unsupported native Dubbo platform: os=" + operatingSystem + ", arch=" + architecture
+                        + ". Supported platforms: Windows x64, Linux x64, macOS ARM64");
+    }
+
+    private static boolean isX64(String architecture) {
+        return architecture.equals("amd64") || architecture.equals("x86_64") || architecture.equals("x64");
+    }
+
+    private static boolean isArm64(String architecture) {
+        return architecture.equals("aarch64") || architecture.equals("arm64");
     }
 
     private static String sha256(byte[] value) {

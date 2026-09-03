@@ -8,7 +8,7 @@
     <artifactId>java-rust-dubbo-spring-boot-parent</artifactId>
     <version>0.4.0</version>
   </parent>
-  <artifactId>java-rust-dubbo-apache-compat-annotations</artifactId>
-  <name>Java Rust Dubbo Apache Source Compatibility Annotations</name>
-  <description>Optional source compatibility annotations for applications migrating from Apache Dubbo imports.</description>
+  <artifactId>java-rust-dubbo-native-macos-aarch64</artifactId>
+  <name>Java Rust Dubbo Native macOS ARM64</name>
+  <description>macOS 11 or newer ARM64 native data plane for Java Rust Dubbo.</description>
 </project>
