@@ -42,7 +42,48 @@ jobs:
             exit 1
           fi
           sha256sum --check NATIVE_SHA256SUMS
+      - name: Detect an existing complete Maven release
+        id: maven-release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          base='https://maven.pkg.github.com/esasmer-dou/java-rust-dubbo-spring-boot/com/reactor'
+          artifacts=(
+            java-rust-dubbo-spring-boot-parent
+            java-rust-dubbo-annotations
+            java-rust-dubbo-apache-compat-annotations
+            java-rust-dubbo-runtime
+            java-rust-dubbo-native-windows-x64
+            java-rust-dubbo-native-linux-x64
+            java-rust-dubbo-native-macos-aarch64
+            java-rust-dubbo-codegen
+            java-rust-dubbo-enhancer-maven-plugin
+            java-rust-dubbo-spring-boot-starter
+          )
+          published=0
+          for artifact in "${artifacts[@]}"; do
+            url="$base/$artifact/$version/$artifact-$version.pom"
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --user "$GITHUB_ACTOR:$GITHUB_TOKEN" "$url")"
+            case "$status" in
+              200) published=$((published + 1)) ;;
+              404) ;;
+              *) echo "Unexpected package response for $artifact: HTTP $status"; exit 1 ;;
+            esac
+          done
+          if [[ "$published" -eq "${#artifacts[@]}" ]]; then
+            echo 'published=true' >> "$GITHUB_OUTPUT"
+          elif [[ "$published" -eq 0 ]]; then
+            echo 'published=false' >> "$GITHUB_OUTPUT"
+          else
+            echo "Partial Maven release detected: $published/${#artifacts[@]} artifacts exist"
+            exit 1
+          fi
       - name: Build and publish Maven artifacts
+        if: steps.maven-release.outputs.published != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: mvn -B -ntp clean deploy
@@ -62,13 +103,12 @@ jobs:
             <dependencies>
               <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-spring-boot-starter</artifactId><version>$version</version></dependency>
               <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-native-linux-x64</artifactId><version>$version</version><scope>runtime</scope></dependency>
+              <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-native-macos-aarch64</artifactId><version>$version</version><scope>runtime</scope></dependency>
               <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-codegen</artifactId><version>$version</version><scope>provided</scope></dependency>
             </dependencies>
           </project>
           EOF
           mvn -B -ntp -U -Dmaven.repo.local="$RUNNER_TEMP/empty-m2" -f "$RUNNER_TEMP/package-smoke/pom.xml" dependency:go-offline
-          mvn -B -ntp -U -Dmaven.repo.local="$RUNNER_TEMP/empty-m2" \
-            dependency:get -Dartifact="com.reactor:java-rust-dubbo-native-macos-aarch64:$version"
       - name: Generate release assets
         shell: bash
         run: |
