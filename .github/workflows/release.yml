@@ -66,7 +66,7 @@ jobs:
           published=0
           for artifact in "${artifacts[@]}"; do
             url="$base/$artifact/$version/$artifact-$version.pom"
-            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            status="$(curl --location --silent --show-error --output /dev/null --write-out '%{http_code}' \
               --user "$GITHUB_ACTOR:$GITHUB_TOKEN" "$url")"
             case "$status" in
               200) published=$((published + 1)) ;;
