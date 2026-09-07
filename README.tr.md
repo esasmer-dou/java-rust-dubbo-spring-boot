@@ -48,11 +48,24 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.4.0`.
+Güncel sürüm: `0.4.1`.
 
-### 0.4.0 Sürümünde Ne Değişti?
+### 0.4.1 Sürümünde Ne Değişti?
 
-`0.4.0`, Apple Silicon Mac bilgisayarlar için native Maven artifact'ı ekler. Spring annotation'ları, üretilen client'lar, provider dispatcher'ları, property adları, wire protocol ve native ABI değişmez.
+Provider exception mesajı ve bildirilen exception tipi artık genel bir framework hatasıyla değiştirilmez. Bu davranış Rust uygulamalarının kendi arasındaki çağrılarda ve desteklenen Apache Dubbo uyumluluğunda iki yönde de geçerlidir. Senkron hatalar ve hatayla tamamlanan `CompletableFuture` sonuçları aynı sözleşmeyi kullanır.
+
+```java
+import com.reactor.rust.dubbo.runtime.DubboRemoteBusinessException;
+
+try {
+    catalogService.findCustomer(customerId);
+} catch (DubboRemoteBusinessException failure) {
+    log.warn("Provider çağrısı başarısız: type={}, message={}",
+            failure.remoteType(), failure.remoteMessage());
+}
+```
+
+Beklenen sonuçlarda tip güvenli result record ve sabit hata kodu kullanın. Exception'ı başarısız çağrılar için kullanın. Uzak stack trace taşınmaz. Tam stack için provider log ve trace kayıtlarını inceleyin. Java annotation API'si, generated metot imzaları, başarılı çağrı yolu, property adları ve native ABI `3` değişmez.
 
 ## Hızlı Başlangıç
 
@@ -92,7 +105,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.4.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.4.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>

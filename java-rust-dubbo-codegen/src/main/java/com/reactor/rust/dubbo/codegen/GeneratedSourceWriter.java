@@ -315,18 +315,11 @@ final class GeneratedSourceWriter {
                     + "\"Unexpected service id \" + serviceId);");
             line(source, "      com.reactor.rust.dubbo.runtime.Hessian2Input in = requestInput(request, requestLength);");
             line(source, "      com.reactor.rust.dubbo.runtime.Hessian2Output out = responseOutput(responseHandle, response);");
-            line(source, "      try {");
-            line(source, "        switch (methodId) {");
+            line(source, "      switch (methodId) {");
             for (RustDubboProcessor.MethodContract method : service.methods()) {
                 emitDispatchCase(source, method);
             }
-            line(source, "          default -> throw new IllegalArgumentException(\"Unknown method id \" + methodId);");
-            line(source, "        }");
-            line(source, "      } catch (RuntimeException exception) {");
-            line(source, "        throw exception;");
-            line(source, "      } catch (Exception exception) {");
-            line(source, "        throw new com.reactor.rust.dubbo.runtime.DubboNativeException("
-                    + "\"Dubbo provider business method failed\", exception);");
+            line(source, "        default -> throw new IllegalArgumentException(\"Unknown method id \" + methodId);");
             line(source, "      }");
             line(source, "      return out.position();");
             line(source, "    }");
@@ -351,8 +344,12 @@ final class GeneratedSourceWriter {
             } catch (IOException error) {
                 throw new IllegalStateException(error);
             }
-            line(source, "            " + signature.getReturnType() + " future = target."
-                    + method.name() + '(' + arguments + ");");
+            line(source, "            " + signature.getReturnType() + " future;");
+            line(source, "            try {");
+            line(source, "              future = target." + method.name() + '(' + arguments + ");");
+            line(source, "            } catch (Exception exception) {");
+            line(source, "              return writeBusinessExceptionResponse(out, exception);");
+            line(source, "            }");
             line(source, "            if (future == null) {");
             line(source, "              com.reactor.rust.dubbo.runtime.NativeDubboBridge.failProviderResponse("
                     + "responseHandle, \"Provider returned a null CompletableFuture\");");
@@ -360,11 +357,20 @@ final class GeneratedSourceWriter {
             line(source, "            }");
             line(source, "            if (future.isDone()) {");
             if (isErasure(valueType, "java.lang.Void")) {
-                line(source, "              future.join();");
+                line(source, "              try {");
+                line(source, "                future.join();");
+                line(source, "              } catch (RuntimeException exception) {");
+                line(source, "                return writeBusinessExceptionResponse(out, exception);");
+                line(source, "              }");
                 line(source, "              out.writeInt("
                         + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");
             } else {
-                line(source, "              " + valueType + " value = future.join();");
+                line(source, "              " + valueType + " value;");
+                line(source, "              try {");
+                line(source, "                value = future.join();");
+                line(source, "              } catch (RuntimeException exception) {");
+                line(source, "                return writeBusinessExceptionResponse(out, exception);");
+                line(source, "              }");
                 line(source, "              if (value == null) {");
                 line(source, "                out.writeInt("
                         + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");
@@ -377,8 +383,7 @@ final class GeneratedSourceWriter {
             line(source, "            } else {");
             line(source, "              future.whenComplete((value, error) -> {");
             line(source, "              if (error != null) {");
-            line(source, "                com.reactor.rust.dubbo.runtime.NativeDubboBridge.failProviderResponse("
-                    + "responseHandle, error.toString());");
+            line(source, "                completeBusinessExceptionResponse(responseHandle, error);");
             line(source, "                return;");
             line(source, "              }");
             line(source, "              try {");
@@ -403,24 +408,36 @@ final class GeneratedSourceWriter {
                     + "completeProviderResponse(responseHandle, asyncOut.position());");
             line(source, "              } catch (Throwable encodingError) {");
             line(source, "                com.reactor.rust.dubbo.runtime.NativeDubboBridge.failProviderResponse("
-                    + "responseHandle, encodingError.toString());");
+                    + "responseHandle, providerFailureMessage(encodingError));");
             line(source, "              }");
             line(source, "              });");
             line(source, "              return ASYNC_PENDING;");
             line(source, "            }");
         } else if (signature.getReturnType().getKind() == TypeKind.VOID) {
-            line(source, "            target." + method.name() + '(' + arguments + ");");
+            line(source, "            try {");
+            line(source, "              target." + method.name() + '(' + arguments + ");");
+            line(source, "            } catch (Exception exception) {");
+            line(source, "              return writeBusinessExceptionResponse(out, exception);");
+            line(source, "            }");
             line(source, "            out.writeInt("
                     + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");
         } else if (signature.getReturnType().getKind().isPrimitive()) {
-            line(source, "            " + signature.getReturnType() + " value = target."
-                    + method.name() + '(' + arguments + ");");
+            line(source, "            " + signature.getReturnType() + " value;");
+            line(source, "            try {");
+            line(source, "              value = target." + method.name() + '(' + arguments + ");");
+            line(source, "            } catch (Exception exception) {");
+            line(source, "              return writeBusinessExceptionResponse(out, exception);");
+            line(source, "            }");
             line(source, "            out.writeInt("
                     + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_VALUE);");
             line(source, "            " + codecs.writeCall(signature.getReturnType(), "out", "value") + ';');
         } else {
-            line(source, "            " + signature.getReturnType() + " value = target."
-                    + method.name() + '(' + arguments + ");");
+            line(source, "            " + signature.getReturnType() + " value;");
+            line(source, "            try {");
+            line(source, "              value = target." + method.name() + '(' + arguments + ");");
+            line(source, "            } catch (Exception exception) {");
+            line(source, "              return writeBusinessExceptionResponse(out, exception);");
+            line(source, "            }");
             line(source, "            if (value == null) {");
             line(source, "              out.writeInt("
                     + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");

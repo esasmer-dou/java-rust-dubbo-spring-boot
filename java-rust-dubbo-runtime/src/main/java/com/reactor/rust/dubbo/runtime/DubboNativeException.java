@@ -1,6 +1,6 @@
 package com.reactor.rust.dubbo.runtime;
 
-public final class DubboNativeException extends RuntimeException {
+public class DubboNativeException extends RuntimeException {
     public DubboNativeException(String message) {
         super(message);
     }

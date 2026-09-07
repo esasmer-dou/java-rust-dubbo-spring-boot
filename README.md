@@ -48,11 +48,24 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.4.0`.
+Current release: `0.4.1`.
 
-### What Changed In 0.4.0
+### What Changed In 0.4.1
 
-Version `0.4.0` adds a native Maven artifact for Apple Silicon Macs. The Spring annotations, generated clients, provider dispatchers, configuration keys, wire protocol, and native ABI remain unchanged.
+Provider exceptions now keep the provider message and reported exception type instead of becoming a generic framework error. This works for Rust-to-Rust calls and for supported Apache Dubbo interoperability in both directions. Synchronous failures and failed `CompletableFuture` results use the same contract.
+
+```java
+import com.reactor.rust.dubbo.runtime.DubboRemoteBusinessException;
+
+try {
+    catalogService.findCustomer(customerId);
+} catch (DubboRemoteBusinessException failure) {
+    log.warn("Provider call failed: type={}, message={}",
+            failure.remoteType(), failure.remoteMessage());
+}
+```
+
+Use typed result records and stable error codes for expected outcomes. Use exceptions for failed calls. Remote stack traces are not transferred; inspect provider logs and traces for the full stack. The Java annotation API, generated method signatures, success path, configuration keys, and native ABI `3` are unchanged.
 
 ## Quick Start
 
@@ -92,7 +105,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.4.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.4.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>

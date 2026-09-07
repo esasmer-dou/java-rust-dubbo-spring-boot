@@ -129,25 +129,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
-        run: |
-          notes="$(cat <<'EOF'
-          ## What's New
-
-          Version `0.4.0` adds native Apple Silicon macOS support. Applications running on M1, M2, M3, M4, or newer Macs can now use `java-rust-dubbo-native-macos-aarch64` with an ARM64 Java 21 JDK.
-
-          The dylib is built and tested on a GitHub-hosted Apple Silicon runner. The release gate verifies ARM64 architecture, the macOS 11 deployment target, system-only dynamic dependencies, code signing, and JNI loading.
-
-          Upgrade the framework version to `0.4.0` and select exactly one native artifact for the target operating system. Controllers, business services, contracts, DTOs, annotations, route properties, the Dubbo wire contract, and native ABI `3` remain unchanged.
-
-          ## Yenilikler
-
-          `0.4.0`, Apple Silicon macOS desteği ekler. M1, M2, M3, M4 veya daha yeni Mac bilgisayarlarda çalışan uygulamalar, ARM64 Java 21 JDK ile `java-rust-dubbo-native-macos-aarch64` artifact'ını kullanabilir.
-
-          Dylib, GitHub tarafından sağlanan Apple Silicon runner üzerinde üretilir ve test edilir. Release gate; ARM64 mimarisini, macOS 11 deployment target değerini, yalnızca sistem dinamik bağımlılıklarını, kod imzasını ve JNI yüklemesini doğrular.
-
-          Framework sürümünü `0.4.0` yapın ve hedef işletim sistemi için yalnızca bir native artifact seçin. Controller, business service, contract, DTO, annotation, route property, Dubbo wire contract ve native ABI `3` değişmez.
-          EOF
-          )"
-          gh release create "$GITHUB_REF_NAME" release-assets/* \
-            --title "Java Rust Dubbo Spring Boot ${GITHUB_REF_NAME#v}" \
-            --notes "$notes"
+        run: >-
+          gh release create "$GITHUB_REF_NAME" release-assets/*
+          --title "Java Rust Dubbo Spring Boot ${GITHUB_REF_NAME#v}"
+          --notes-file RELEASE_NOTES.md

@@ -23,6 +23,11 @@ public final class Hessian2Output {
     private static final String[] DATE_FIELDS = {"year", "month", "day"};
     private static final String[] TIME_FIELDS = {"hour", "minute", "second", "nano"};
     private static final String[] DATE_TIME_FIELDS = {"date", "time"};
+    private static final String REMOTE_THROWABLE = "java.lang.RuntimeException";
+    private static final String[] REMOTE_THROWABLE_FIELDS = {"detailMessage", "cause", "remoteType"};
+    private static final int MAX_REMOTE_CAUSE_DEPTH = 8;
+    private static final int MAX_REMOTE_MESSAGE_CHARS = 4096;
+    private static final int MAX_REMOTE_TYPE_CHARS = 512;
 
     private ByteBuffer buffer;
     private long nativeHandle;
@@ -241,6 +246,26 @@ public final class Hessian2Output {
         writeLocalTime(value.toLocalTime());
     }
 
+    /** Writes a bounded Throwable shape that both Hessian Lite and this runtime can decode. */
+    public void writeRemoteThrowable(Throwable value) {
+        if (value == null) {
+            throw new IllegalArgumentException("remote Throwable must not be null");
+        }
+        writeRemoteThrowable(value, 0);
+    }
+
+    private void writeRemoteThrowable(Throwable value, int depth) {
+        writeObjectStart(REMOTE_THROWABLE, REMOTE_THROWABLE_FIELDS);
+        writeString(truncate(value.getMessage(), MAX_REMOTE_MESSAGE_CHARS));
+        Throwable cause = value.getCause();
+        if (cause == null || cause == value || depth + 1 >= MAX_REMOTE_CAUSE_DEPTH) {
+            writeNull();
+        } else {
+            writeRemoteThrowable(cause, depth + 1);
+        }
+        writeString(truncate(value.getClass().getName(), MAX_REMOTE_TYPE_CHARS));
+    }
+
     public void writeDynamic(Object value) {
         if (value == null) {
             writeNull();
@@ -326,6 +351,17 @@ public final class Hessian2Output {
                 buffer.put((byte) (0x80 | current & 0x3f));
             }
         }
+    }
+
+    private static String truncate(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) {
+            return value;
+        }
+        int end = maxChars;
+        if (Character.isHighSurrogate(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(0, end);
     }
 
     private int findClass(String typeName, String[] fields) {

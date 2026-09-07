@@ -96,7 +96,14 @@ public abstract class GeneratedDubboClientSupport {
     protected static int requireValueResponse(Hessian2Input input) {
         int flag = input.readInt();
         if (flag == RESPONSE_WITH_EXCEPTION || flag == RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS) {
-            throw new DubboNativeException("Dubbo provider returned a business exception");
+            Object payload;
+            try {
+                payload = input.readDynamic();
+            } catch (RuntimeException decodingFailure) {
+                throw new DubboNativeException(
+                        "Dubbo provider returned an unreadable business exception", decodingFailure);
+            }
+            throw DubboRemoteBusinessException.fromPayload(payload);
         }
         if (flag != RESPONSE_VALUE && flag != RESPONSE_VALUE_WITH_ATTACHMENTS
                 && flag != RESPONSE_NULL_VALUE && flag != RESPONSE_NULL_VALUE_WITH_ATTACHMENTS) {
