@@ -30,8 +30,8 @@ public final class Hessian2Input {
     private String[] classTypes = new String[8];
     private String[][] classFields = new String[8][];
     private int classCount;
-    private final List<String> types = new ArrayList<>(4);
-    private final List<Object> references = new ArrayList<>(16);
+    private List<String> types = new ArrayList<>(4);
+    private List<Object> references = new ArrayList<>(16);
     private int maxCollectionItems = 100_000;
 
     public void attach(ByteBuffer source, int length, int collectionLimit) {
@@ -41,12 +41,15 @@ public final class Hessian2Input {
         if (length < 0 || length > source.capacity()) {
             throw new IllegalArgumentException("Invalid Hessian input length " + length);
         }
+        clearSessionState();
         buffer = source.duplicate().order(ByteOrder.BIG_ENDIAN);
         buffer.clear().limit(length);
-        classCount = 0;
-        types.clear();
-        references.clear();
         maxCollectionItems = collectionLimit;
+    }
+
+    public void detach() {
+        buffer = null;
+        clearSessionState();
     }
 
     public boolean readNull() {
@@ -539,7 +542,33 @@ public final class Hessian2Input {
     }
 
     public int remaining() {
+        if (buffer == null) {
+            throw new IllegalStateException("Hessian input is not attached");
+        }
         return buffer.remaining();
+    }
+
+    private void clearSessionState() {
+        if (classTypes.length > 64) {
+            classTypes = new String[8];
+            classFields = new String[8][];
+        } else {
+            Arrays.fill(classTypes, 0, classCount, null);
+            Arrays.fill(classFields, 0, classCount, null);
+        }
+        classCount = 0;
+
+        int typeCount = types.size();
+        types.clear();
+        if (typeCount > 64) {
+            types = new ArrayList<>(4);
+        }
+
+        int referenceCount = references.size();
+        references.clear();
+        if (referenceCount > 1_024) {
+            references = new ArrayList<>(16);
+        }
     }
 
     private int readIntTag(byte tag) {

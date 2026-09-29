@@ -51,6 +51,8 @@ public final class DubboCallBuffer implements AutoCloseable {
     @Override
     public void close() {
         if (leased) {
+            input.detach();
+            output.detach();
             leased = false;
             owner.release(this);
         }

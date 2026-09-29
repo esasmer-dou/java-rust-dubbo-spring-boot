@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 - 2026-09-29
+
+- Add the opt-in `DubboStreamingList<T>` provider response source for large, read-only JDBC results while preserving existing `List<T>` service signatures.
+- Let generated provider dispatchers encode streaming rows directly into the native response buffer and deterministically close JDBC/native resources on success or failure.
+- Add deferred Hessian list length support and remove the second Rust request-argument buffer allocation.
+- Preserve reflection-free generated clients, Spring annotations, configuration keys, wire compatibility, and native ABI `3`.
+- Rebuild and verify Windows x64, Linux x64 GLIBC 2.17, and Apple Silicon macOS 11+ native artifacts from the same tagged source.
+
 ## 0.4.1 - 2026-09-07
 
 - Preserve provider business exception messages, reported exception types, and bounded cause chains across Rust and Apache Dubbo consumer/provider combinations.

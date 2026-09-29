@@ -314,14 +314,18 @@ final class GeneratedSourceWriter {
             line(source, "      if (serviceId != " + serviceId + ") throw new IllegalArgumentException("
                     + "\"Unexpected service id \" + serviceId);");
             line(source, "      com.reactor.rust.dubbo.runtime.Hessian2Input in = requestInput(request, requestLength);");
-            line(source, "      com.reactor.rust.dubbo.runtime.Hessian2Output out = responseOutput(responseHandle, response);");
-            line(source, "      switch (methodId) {");
+            line(source, "      try {");
+            line(source, "        com.reactor.rust.dubbo.runtime.Hessian2Output out = responseOutput(responseHandle, response);");
+            line(source, "        switch (methodId) {");
             for (RustDubboProcessor.MethodContract method : service.methods()) {
                 emitDispatchCase(source, method);
             }
-            line(source, "        default -> throw new IllegalArgumentException(\"Unknown method id \" + methodId);");
+            line(source, "          default -> throw new IllegalArgumentException(\"Unknown method id \" + methodId);");
+            line(source, "        }");
+            line(source, "        return out.position();");
+            line(source, "      } finally {");
+            line(source, "        releaseCodecContext();");
             line(source, "      }");
-            line(source, "      return out.position();");
             line(source, "    }");
             line(source, "  }");
             line(source, "");
@@ -371,6 +375,8 @@ final class GeneratedSourceWriter {
                 line(source, "              } catch (RuntimeException exception) {");
                 line(source, "                return writeBusinessExceptionResponse(out, exception);");
                 line(source, "              }");
+                line(source, "              int responseStart = out.position();");
+                line(source, "              try {");
                 line(source, "              if (value == null) {");
                 line(source, "                out.writeInt("
                         + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");
@@ -379,6 +385,10 @@ final class GeneratedSourceWriter {
                         + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_VALUE);");
                 line(source, "                " + codecs.writeCall(valueType, "out", "value") + ';');
                 line(source, "              }");
+                line(source, "              } catch (RuntimeException encodingException) {");
+                line(source, "                return rewriteAsBusinessExceptionResponse("
+                        + "out, responseStart, encodingException);");
+                line(source, "              }");
             }
             line(source, "            } else {");
             line(source, "              future.whenComplete((value, error) -> {");
@@ -386,9 +396,9 @@ final class GeneratedSourceWriter {
             line(source, "                completeBusinessExceptionResponse(responseHandle, error);");
             line(source, "                return;");
             line(source, "              }");
-            line(source, "              try {");
-            line(source, "                com.reactor.rust.dubbo.runtime.Hessian2Output asyncOut = "
+            line(source, "              com.reactor.rust.dubbo.runtime.Hessian2Output asyncOut = "
                     + "new com.reactor.rust.dubbo.runtime.Hessian2Output();");
+            line(source, "              try {");
             line(source, "                asyncOut.attach(com.reactor.rust.dubbo.runtime.NativeDubboBridge."
                     + "growProviderResponse(responseHandle, 1), responseHandle);");
             if (isErasure(valueType, "java.lang.Void")) {
@@ -407,8 +417,9 @@ final class GeneratedSourceWriter {
             line(source, "                com.reactor.rust.dubbo.runtime.NativeDubboBridge."
                     + "completeProviderResponse(responseHandle, asyncOut.position());");
             line(source, "              } catch (Throwable encodingError) {");
-            line(source, "                com.reactor.rust.dubbo.runtime.NativeDubboBridge.failProviderResponse("
-                    + "responseHandle, providerFailureMessage(encodingError));");
+            line(source, "                completeBusinessExceptionResponse(responseHandle, encodingError);");
+            line(source, "              } finally {");
+            line(source, "                asyncOut.detach();");
             line(source, "              }");
             line(source, "              });");
             line(source, "              return ASYNC_PENDING;");
@@ -438,13 +449,19 @@ final class GeneratedSourceWriter {
             line(source, "            } catch (Exception exception) {");
             line(source, "              return writeBusinessExceptionResponse(out, exception);");
             line(source, "            }");
-            line(source, "            if (value == null) {");
-            line(source, "              out.writeInt("
+            line(source, "            int responseStart = out.position();");
+            line(source, "            try {");
+            line(source, "              if (value == null) {");
+            line(source, "                out.writeInt("
                     + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");
-            line(source, "            } else {");
-            line(source, "              out.writeInt("
+            line(source, "              } else {");
+            line(source, "                out.writeInt("
                     + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_VALUE);");
-            line(source, "              " + codecs.writeCall(signature.getReturnType(), "out", "value") + ';');
+            line(source, "                " + codecs.writeCall(signature.getReturnType(), "out", "value") + ';');
+            line(source, "              }");
+            line(source, "            } catch (RuntimeException encodingException) {");
+            line(source, "              return rewriteAsBusinessExceptionResponse("
+                    + "out, responseStart, encodingException);");
             line(source, "            }");
         }
         line(source, "          }");
@@ -753,6 +770,23 @@ final class GeneratedSourceWriter {
             line(source, "  private static void " + methodName("write", type)
                     + "(com.reactor.rust.dubbo.runtime.Hessian2Output out, " + type + " value) {");
             line(source, "    if (value == null) { out.writeNull(); return; }");
+            if (!set) {
+                line(source, "    if (value instanceof com.reactor.rust.dubbo.runtime."
+                        + "DubboStreamingList<?> streaming) {");
+                line(source, "      int lengthOffset = out.writeDeferredListStart();");
+                line(source, "      int size = 0;");
+                line(source, "      try (streaming) {");
+                line(source, "        java.util.Iterator<?> entries = streaming.streamingIterator();");
+                line(source, "        while (entries.hasNext()) {");
+                line(source, "          "
+                        + writeCall(item, "out", "(" + item + ") entries.next()") + ';');
+                line(source, "          size = java.lang.Math.incrementExact(size);");
+                line(source, "        }");
+                line(source, "        out.completeDeferredList(lengthOffset, size);");
+                line(source, "      }");
+                line(source, "      return;");
+                line(source, "    }");
+            }
             line(source, "    out.writeListStart(value.size());");
             line(source, "    for (" + item + " item : value) " + writeCall(item, "out", "item") + ';');
             line(source, "  }");

@@ -1,21 +1,27 @@
 ## What's New
 
-Version `0.4.1` keeps provider business-exception details instead of replacing them with a generic framework error.
+Version `0.5.0` adds an opt-in low-retention provider path for large, read-only JDBC results.
 
-- Rust consumers receive `DubboRemoteBusinessException` with the provider message, reported exception type, and a bounded cause chain.
-- Rust providers return the standard Dubbo business-exception response to Rust and supported Apache Dubbo consumers.
-- Synchronous failures and failed `CompletableFuture` results follow the same contract.
-- Remote stack traces are not transferred. Expected outcomes should use typed result records and stable error codes.
+- `DubboStreamingList<T>` lets generated provider code encode rows directly into the Dubbo response instead of first building a second full Java collection.
+- Existing service contracts still return `List<T>`. Consumer code, Spring annotations, generated method signatures, and configuration keys remain compatible.
+- Cursor, statement, connection, and native response resources are closed deterministically on success and failure.
+- Request argument encoding no longer creates a second Rust `Vec`.
+- Provider business exceptions continue to preserve the remote message, reported type, and bounded cause chain.
 
-Upgrade every framework artifact to `0.4.1` together and include exactly one native platform artifact. Windows x64, Linux x64 with GLIBC 2.17, and Apple Silicon macOS 11+ binaries were rebuilt from the same tagged source. Spring annotations, generated method signatures, business code, properties, and native ABI `3` remain compatible.
+Use the streaming path only for provider-side, single-pass queries that cannot be paginated. Consumers still materialize the final list, so payload and collection limits remain mandatory.
+
+Upgrade every framework artifact to `0.5.0` together and include exactly one native platform artifact. Windows x64, Linux x64 with GLIBC 2.17, and Apple Silicon macOS 11+ binaries were rebuilt and verified from the same tag. Native ABI remains `3`.
 
 ## Yenilikler
 
-`0.4.1`, provider business exception bilgisinin genel bir framework hatasıyla değiştirilmesini engeller.
+`0.5.0`, büyük ve salt okunur JDBC sonuçları için isteğe bağlı, düşük memory tutan bir provider yolu ekler.
 
-- Rust consumer, provider mesajını, bildirilen exception tipini ve sınırlandırılmış cause zincirini içeren `DubboRemoteBusinessException` alır.
-- Rust provider, Rust consumer ve desteklenen Apache Dubbo consumer için standart Dubbo business-exception cevabı döner.
-- Senkron hatalar ve hatayla tamamlanan `CompletableFuture` sonuçları aynı sözleşmeyi kullanır.
-- Uzak stack trace taşınmaz. Beklenen sonuçlarda tip güvenli result record ve sabit hata kodu kullanılmalıdır.
+- `DubboStreamingList<T>`, generated provider kodunun ikinci bir büyük Java collection oluşturmadan satırları doğrudan Dubbo response içine yazmasını sağlar.
+- Mevcut service kontratları yine `List<T>` döner. Consumer kodu, Spring annotation'ları, generated metot imzaları ve property adları uyumludur.
+- Cursor, statement, connection ve native response kaynakları başarıda ve hatada kesin olarak kapatılır.
+- Request argümanları encode edilirken ikinci bir Rust `Vec` artık oluşturulmaz.
+- Provider business exception mesajı, bildirilen tipi ve sınırlandırılmış cause zinciri korunmaya devam eder.
 
-Tüm framework artifact'larını birlikte `0.4.1` sürümüne yükseltin ve yalnızca bir native platform artifact'ı ekleyin. Windows x64, GLIBC 2.17 uyumlu Linux x64 ve Apple Silicon macOS 11+ binary'leri aynı tag kaynak kodundan yeniden üretildi. Spring annotation'ları, generated metot imzaları, business kodu, property'ler ve native ABI `3` uyumluluğunu korur.
+Streaming yolunu yalnızca provider tarafındaki tek geçişli ve pagination uygulanamayan sorgularda kullanın. Consumer son listeyi yine memory içinde oluşturur. Bu nedenle payload ve collection limitlerini mutlaka sınırlı tutun.
+
+Tüm framework artifact'larını birlikte `0.5.0` sürümüne yükseltin ve yalnızca bir native platform artifact'ı ekleyin. Windows x64, GLIBC 2.17 uyumlu Linux x64 ve macOS 11+ Apple Silicon binary'leri aynı tag kaynak kodundan yeniden üretildi ve doğrulandı. Native ABI `3` olarak kalır.

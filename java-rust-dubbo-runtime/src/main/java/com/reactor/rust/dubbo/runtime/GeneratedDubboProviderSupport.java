@@ -25,6 +25,12 @@ public abstract class GeneratedDubboProviderSupport implements NativeDubboDispat
         return context.output;
     }
 
+    protected final void releaseCodecContext() {
+        CodecContext context = codecs.get();
+        context.input.detach();
+        context.output.detach();
+    }
+
     protected static void writeValueResponsePrefix(Hessian2Output output, Object value) {
         output.writeInt(value == null
                 ? GeneratedDubboClientSupport.RESPONSE_NULL_VALUE
@@ -41,6 +47,12 @@ public abstract class GeneratedDubboProviderSupport implements NativeDubboDispat
         return output.position();
     }
 
+    protected static int rewriteAsBusinessExceptionResponse(
+            Hessian2Output output, int responseStart, Throwable failure) {
+        output.rewind(responseStart);
+        return writeBusinessExceptionResponse(output, failure);
+    }
+
     protected static void completeBusinessExceptionResponse(long responseHandle, Throwable failure) {
         Throwable businessFailure = unwrapCompletionFailure(failure);
         if (businessFailure instanceof Error) {
@@ -48,8 +60,8 @@ public abstract class GeneratedDubboProviderSupport implements NativeDubboDispat
                     providerFailureMessage(businessFailure));
             return;
         }
+        Hessian2Output output = new Hessian2Output();
         try {
-            Hessian2Output output = new Hessian2Output();
             output.attach(NativeDubboBridge.growProviderResponse(responseHandle, 1), responseHandle);
             int length = writeBusinessExceptionResponse(output, businessFailure);
             NativeDubboBridge.completeProviderResponse(responseHandle, length);
@@ -57,6 +69,8 @@ public abstract class GeneratedDubboProviderSupport implements NativeDubboDispat
             NativeDubboBridge.failProviderResponse(responseHandle,
                     "Failed to encode provider business exception: "
                             + providerFailureMessage(encodingFailure));
+        } finally {
+            output.detach();
         }
     }
 

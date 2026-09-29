@@ -14,6 +14,7 @@ Public paket, Java API'sini ve doğrulanmış Windows, Linux ve Apple Silicon ma
 - [Profil seçimi](#profil-seçimi)
 - [Kritik runtime limitleri](#kritik-runtime-limitleri)
 - [Production reçeteleri](#sık-kullanılan-production-reçeteleri)
+- [Büyük provider sonuçları](#büyük-provider-sonuçları)
 - [ZooKeeper olmadan Kubernetes](#zookeeper-olmadan-kubernetes-kullanımı)
 - [Birden fazla provider uygulaması](#birden-fazla-provider-uygulaması)
 - [Koşullu reference kullanımı](#koşullu-reference-kullanımı)
@@ -48,9 +49,15 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.4.1`.
+Güncel sürüm: `0.5.0`.
 
-### 0.4.1 Sürümünde Ne Değişti?
+### 0.5.0 Sürümünde Ne Değişti?
+
+Provider, büyük bir JDBC sonucunu artık doğrudan generated Dubbo response encoder'a aktarabilir. Bu özellik isteğe bağlıdır. Yanıt gönderilmeden önce ikinci bir büyük Java collection oluşturulmasını önler. Ortak service kontratı yine `List<T>` döner. Consumer kodu ve mevcut provider metot imzaları değişmez.
+
+`DubboStreamingList<T>` yalnızca provider implementasyonundaki büyük, salt okunur ve tek geçişli sorgularda kullanılmalıdır. Generated dispatcher; cursor, statement ve connection kaynaklarını başarıda ve hatada kapatır. Varsayılan çözüm yine pagination olmalıdır. Consumer normal bir `List<T>` alır. Payload ve collection limitleri sınırlı tutulmalıdır.
+
+Provider exception mesajı ve bildirilen exception tipi de genel bir framework hatasıyla değiştirilmeden taşınmaya devam eder. Bu davranış Rust uygulamalarının kendi arasındaki çağrılarda ve desteklenen Apache Dubbo uyumluluğunda iki yönde de geçerlidir.
 
 Provider exception mesajı ve bildirilen exception tipi artık genel bir framework hatasıyla değiştirilmez. Bu davranış Rust uygulamalarının kendi arasındaki çağrılarda ve desteklenen Apache Dubbo uyumluluğunda iki yönde de geçerlidir. Senkron hatalar ve hatayla tamamlanan `CompletableFuture` sonuçları aynı sözleşmeyi kullanır.
 
@@ -105,7 +112,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.4.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.5.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -514,6 +521,38 @@ reactor.dubbo.consumer.max-payload-bytes=16777216
 reactor.dubbo.consumer.max-collection-items=20000
 reactor.dubbo.consumer.max-retained-buffer-bytes=65536
 ```
+
+## Büyük Provider Sonuçları
+
+Ortak kontratı değiştirmeyin:
+
+```java
+public interface CatalogService {
+    List<CatalogItem> listAll();
+}
+```
+
+Yalnızca provider implementasyonunda `DubboStreamingList<T>` döndürün:
+
+```java
+@DubboService(interfaceClass = CatalogService.class, executor = "catalog-query")
+public final class CatalogServiceImpl implements CatalogService {
+    private final CatalogRepository repository;
+
+    @Override
+    public List<CatalogItem> listAll() {
+        return repository.streamAll();
+    }
+}
+
+public interface CatalogRepository {
+    DubboStreamingList<CatalogItem> streamAll();
+}
+```
+
+`DubboStreamingList`, yalnızca provider tarafında kullanılan tek geçişli bir response kaynağıdır. `close()` implementasyonu JDBC `ResultSet`, statement ve connection kaynaklarını serbest bırakmalıdır. Bu nesneyi cache'e koymayın, iki kez dolaşmayın, command metotlarından döndürmeyin ve provider çağrısının dışına taşımayın. Generated provider kodu encoding başarısız olsa bile kaynağı kapatır.
+
+Consumer normal bir `List<CatalogItem>` alır. Bu özellik provider tarafındaki ara nesne tutulmasını azaltır. Consumer tarafındaki listeyi kaldırmaz. `max-payload-bytes` ve `max-collection-items` değerlerini sınırlı tutun. İş kontratı izin veriyorsa pagination kullanın.
 
 ## ZooKeeper Olmadan Kubernetes Kullanımı
 

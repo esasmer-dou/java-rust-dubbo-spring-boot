@@ -42,15 +42,30 @@ public final class Hessian2Output {
         if (target == null || !target.isDirect()) {
             throw new IllegalArgumentException("Hessian output requires a direct ByteBuffer");
         }
+        clearClassDefinitions();
         buffer = target.order(ByteOrder.BIG_ENDIAN);
         buffer.clear();
         nativeHandle = responseHandle;
-        classCount = 0;
+    }
+
+    public void detach() {
+        buffer = null;
+        nativeHandle = 0;
+        clearClassDefinitions();
     }
 
     public int position() {
         requireAttached();
         return buffer.position();
+    }
+
+    public void rewind(int position) {
+        requireAttached();
+        if (position < 0 || position > buffer.position()) {
+            throw new IllegalArgumentException("invalid Hessian output rewind position: " + position);
+        }
+        buffer.position(position);
+        clearClassDefinitions();
     }
 
     public ByteBuffer buffer() {
@@ -166,6 +181,26 @@ public final class Hessian2Output {
             put((byte) 'X');
             writeInt(size);
         }
+    }
+
+    public int writeDeferredListStart() {
+        ensure(6);
+        buffer.put((byte) 'X');
+        buffer.put((byte) 'I');
+        int lengthOffset = buffer.position();
+        buffer.putInt(0);
+        return lengthOffset;
+    }
+
+    public void completeDeferredList(int lengthOffset, int size) {
+        requireAttached();
+        if (size < 0) {
+            throw new IllegalArgumentException("list size must not be negative");
+        }
+        if (lengthOffset < 2 || lengthOffset + Integer.BYTES > buffer.position()) {
+            throw new IllegalArgumentException("invalid deferred list length offset: " + lengthOffset);
+        }
+        buffer.putInt(lengthOffset, size);
     }
 
     public void writeMapStart() {
@@ -304,6 +339,17 @@ public final class Hessian2Output {
             for (Object item : current) {
                 writeDynamic(item);
             }
+        } else if (value instanceof DubboStreamingList<?> current) {
+            int lengthOffset = writeDeferredListStart();
+            int size = 0;
+            try (current) {
+                var iterator = current.streamingIterator();
+                while (iterator.hasNext()) {
+                    writeDynamic(iterator.next());
+                    size = Math.incrementExact(size);
+                }
+                completeDeferredList(lengthOffset, size);
+            }
         } else if (value instanceof List<?> current) {
             writeListStart(current.size());
             for (Object item : current) {
@@ -413,5 +459,16 @@ public final class Hessian2Output {
         if (buffer == null) {
             throw new IllegalStateException("Hessian output is not attached");
         }
+    }
+
+    private void clearClassDefinitions() {
+        if (classTypes.length > 64) {
+            classTypes = new String[8];
+            classFields = new String[8][];
+        } else {
+            Arrays.fill(classTypes, 0, classCount, null);
+            Arrays.fill(classFields, 0, classCount, null);
+        }
+        classCount = 0;
     }
 }

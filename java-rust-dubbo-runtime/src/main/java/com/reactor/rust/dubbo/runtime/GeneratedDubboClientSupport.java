@@ -61,6 +61,8 @@ public abstract class GeneratedDubboClientSupport {
                     result.complete(decoder.decode(current));
                 } catch (Throwable error) {
                     result.completeExceptionally(error);
+                } finally {
+                    input.detach();
                 }
             }
 
