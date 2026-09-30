@@ -1,5 +1,6 @@
 package com.reactor.rust.dubbo.runtime;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class GeneratedDubboClientSupport {
@@ -46,6 +47,30 @@ public abstract class GeneratedDubboClientSupport {
             throw new DubboNativeException(message);
         }
         return call.responseInput(response, maxCollectionItems);
+    }
+
+    protected final <E> List<E> invokeStreamedList(
+            int methodId, DubboCallBuffer call, NativeResponseDecoder<E> itemDecoder) {
+        NativeResponse response = invoke(methodId, call);
+        Hessian2Input input = new Hessian2Input();
+        boolean ownershipTransferred = false;
+        try {
+            Hessian2Input current = responseInput(response, input);
+            int responseFlag = requireValueResponse(current);
+            if (isNullResponse(responseFlag) || current.readNull()) {
+                return null;
+            }
+            int size = current.readListStart();
+            List<E> result = new NativeStreamingResultList<>(
+                    response, current, size, itemDecoder);
+            ownershipTransferred = true;
+            return result;
+        } finally {
+            if (!ownershipTransferred) {
+                input.detach();
+                response.close();
+            }
+        }
     }
 
     protected final <T> CompletableFuture<T> invokeAsync(

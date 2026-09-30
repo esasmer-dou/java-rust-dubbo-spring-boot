@@ -14,7 +14,7 @@ The public package contains the Java API and verified Windows, Linux, and Apple 
 - [Choose a profile](#choose-a-profile)
 - [Critical runtime limits](#critical-runtime-limits)
 - [Production recipes](#common-production-recipes)
-- [Large provider results](#large-provider-results)
+- [Large results](#large-results)
 - [Kubernetes without ZooKeeper](#kubernetes-without-zookeeper)
 - [Multiple provider applications](#multiple-provider-applications)
 - [Conditional references](#conditional-references)
@@ -49,15 +49,26 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.5.0`.
+Current release: `0.6.0`.
+
+### What Changed In 0.6.0
+
+Large read-only responses can now stay bounded on both sides of the RPC. Add `@DubboStreamed` to one synchronous `List<T>` contract method. The generated consumer keeps the declared `List<T>` signature, but a one-pass HTTP or export writer can decode and write one item at a time from native memory.
+
+The flow remains one database query, one Dubbo request and one Dubbo response. It does not make repeated page calls. Use this path only for deliberately large, unpaged reads. Normal `List` operations remain compatible, but they materialize the full result and do not provide the consumer memory benefit.
+
+```java
+public interface CatalogService {
+    @DubboStreamed
+    List<CatalogItem> listAll();
+}
+```
 
 ### What Changed In 0.5.0
 
 Providers can now stream a large JDBC result directly into the generated Dubbo response encoder. This opt-in path avoids building a second full Java collection before the response is sent. The public service contract still returns `List<T>`, so consumer code and existing provider signatures do not change.
 
 Use `DubboStreamingList<T>` only inside the provider implementation for a large, read-only, single-pass query. The generated dispatcher closes the cursor, statement, and connection on success or failure. Pagination remains the default choice. The consumer still receives a normal materialized `List<T>` and must keep payload and collection limits bounded.
-
-Provider exceptions continue to preserve the provider message and reported exception type instead of becoming a generic framework error. This works for Rust-to-Rust calls and for supported Apache Dubbo interoperability in both directions.
 
 Provider exceptions now keep the provider message and reported exception type instead of becoming a generic framework error. This works for Rust-to-Rust calls and for supported Apache Dubbo interoperability in both directions. Synchronous failures and failed `CompletableFuture` results use the same contract.
 
@@ -112,7 +123,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.5.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.6.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -522,7 +533,9 @@ reactor.dubbo.consumer.max-collection-items=20000
 reactor.dubbo.consumer.max-retained-buffer-bytes=65536
 ```
 
-## Large Provider Results
+## Large Results
+
+### Provider: Read One JDBC Row At A Time
 
 Keep the shared contract unchanged:
 
@@ -552,7 +565,42 @@ public interface CatalogRepository {
 
 `DubboStreamingList` is a provider-side, single-pass response source. Its `close()` implementation must release the JDBC `ResultSet`, statement, and connection. Do not cache it, iterate it twice, return it from command methods, or expose it outside the provider call. Generated provider code closes it even when encoding fails.
 
-The consumer receives an ordinary `List<CatalogItem>`. This feature reduces provider-side intermediate object retention; it does not remove the consumer-side list. Keep `max-payload-bytes` and `max-collection-items` bounded, and prefer pagination whenever the business contract allows it.
+Without `@DubboStreamed`, the consumer receives a materialized `List<CatalogItem>`. The provider optimization alone does not remove the consumer-side list.
+
+### Consumer: Decode And Write One Row At A Time
+
+Add `@DubboStreamed` to the shared contract only when the result is synchronous, concrete `List<T>`, read-only and intentionally large:
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboStreamed;
+
+public interface CatalogService {
+    @DubboStreamed
+    List<CatalogItem> listAll();
+}
+```
+
+The generated client still satisfies `List<CatalogItem>`. A bounded writer must explicitly use the streaming API:
+
+```java
+List<CatalogItem> rows = catalogService.listAll();
+if (!(rows instanceof DubboStreamingResult<?> nativeRows)) {
+    throw new IllegalStateException("generated streamed client is required");
+}
+
+@SuppressWarnings("unchecked")
+DubboStreamingResult<CatalogItem> streamed =
+        (DubboStreamingResult<CatalogItem>) nativeRows;
+
+try (streamed) {
+    Iterator<CatalogItem> iterator = streamed.streamingIterator();
+    while (iterator.hasNext()) {
+        jsonWriter.write(iterator.next());
+    }
+}
+```
+
+Close the result after success, serialization failure or client disconnect. Do not cache it or consume it twice. Calling normal `List` methods materializes the full result for compatibility. Keep `max-payload-bytes`, `max-collection-items` and HTTP in-flight response limits bounded, and prefer pagination whenever the business contract allows it.
 
 ## Kubernetes Without ZooKeeper
 

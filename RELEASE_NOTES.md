@@ -1,27 +1,61 @@
+# Java Rust Dubbo Spring Boot 0.6.0
+
 ## What's New
 
-Version `0.5.0` adds an opt-in low-retention provider path for large, read-only JDBC results.
+Version `0.6.0` completes the large read-only response path on the consumer side without changing the declared `List<T>` service signature.
 
-- `DubboStreamingList<T>` lets generated provider code encode rows directly into the Dubbo response instead of first building a second full Java collection.
-- Existing service contracts still return `List<T>`. Consumer code, Spring annotations, generated method signatures, and configuration keys remain compatible.
-- Cursor, statement, connection, and native response resources are closed deterministically on success and failure.
-- Request argument encoding no longer creates a second Rust `Vec`.
-- Provider business exceptions continue to preserve the remote message, reported type, and bounded cause chain.
+- `@DubboStreamed` opts one synchronous concrete `List<T>` method into incremental consumer decoding.
+- Generated clients return a native-backed `DubboStreamingResult<T>` behind the existing `List<T>` declaration.
+- A one-pass HTTP or export writer decodes and writes one DTO at a time instead of retaining the entire consumer object graph.
+- Normal `List` operations remain compatible and materialize on demand.
+- Native response ownership is released on completion, explicit close, decode failure, and client disconnect.
+- The data flow remains one database cursor, one Dubbo request, and one Dubbo response. No chatty page loop is introduced.
 
-Use the streaming path only for provider-side, single-pass queries that cannot be paginated. Consumers still materialize the final list, so payload and collection limits remain mandatory.
+Use this feature only for deliberately large, unpaged, read-only results. Keep pagination as the normal API design. The encoded response remains a bounded native payload until the writer completes, so payload and in-flight limits still matter.
 
-Upgrade every framework artifact to `0.5.0` together and include exactly one native platform artifact. Windows x64, Linux x64 with GLIBC 2.17, and Apple Silicon macOS 11+ binaries were rebuilt and verified from the same tag. Native ABI remains `3`.
+```java
+public interface CatalogRepository {
+    @DubboStreamed
+    List<CatalogRow> findAll(CatalogFilter filter);
+}
+```
+
+Upgrade all framework artifacts together:
+
+```xml
+<properties>
+  <java-rust-dubbo.version>0.6.0</java-rust-dubbo.version>
+</properties>
+```
+
+Native ABI remains `3`. Windows x64, GLIBC 2.17-compatible Linux x64, and Apple Silicon macOS 11+ artifacts keep the existing native protocol surface.
 
 ## Yenilikler
 
-`0.5.0`, büyük ve salt okunur JDBC sonuçları için isteğe bağlı, düşük memory tutan bir provider yolu ekler.
+`0.6.0`, büyük ve salt okunur sonuçların consumer tarafını tamamlar. Servis metodunun tanımlı `List<T>` imzası değişmez.
 
-- `DubboStreamingList<T>`, generated provider kodunun ikinci bir büyük Java collection oluşturmadan satırları doğrudan Dubbo response içine yazmasını sağlar.
-- Mevcut service kontratları yine `List<T>` döner. Consumer kodu, Spring annotation'ları, generated metot imzaları ve property adları uyumludur.
-- Cursor, statement, connection ve native response kaynakları başarıda ve hatada kesin olarak kapatılır.
-- Request argümanları encode edilirken ikinci bir Rust `Vec` artık oluşturulmaz.
-- Provider business exception mesajı, bildirilen tipi ve sınırlandırılmış cause zinciri korunmaya devam eder.
+- `@DubboStreamed`, senkron ve somut bir `List<T>` metodunda artımlı consumer decode yolunu açar.
+- Generated client, mevcut `List<T>` tanımının arkasında native response'a bağlı `DubboStreamingResult<T>` döndürür.
+- Tek geçişli HTTP veya export writer, bütün consumer nesne grafiğini tutmak yerine her seferinde bir DTO decode edip yazar.
+- Normal `List` işlemleri uyumluluk için çalışır ve gerektiğinde sonucu materialize eder.
+- Native response sahipliği tamamlanma, açık `close`, decode hatası ve client bağlantısının kopması yollarında serbest bırakılır.
+- Veri akışı tek database cursor, tek Dubbo isteği ve tek Dubbo cevabı olarak kalır. Tekrarlayan sayfa çağrıları eklenmez.
 
-Streaming yolunu yalnızca provider tarafındaki tek geçişli ve pagination uygulanamayan sorgularda kullanın. Consumer son listeyi yine memory içinde oluşturur. Bu nedenle payload ve collection limitlerini mutlaka sınırlı tutun.
+Bu özelliği yalnız bilinçli olarak büyük, sayfalamasız ve salt okunur sonuçlarda kullanın. Normal API tasarımında sayfalama kullanın. Encoded cevap writer tamamlanana kadar sınırlandırılmış native payload olarak kalır. Bu nedenle payload ve in-flight limitleri önemini korur.
 
-Tüm framework artifact'larını birlikte `0.5.0` sürümüne yükseltin ve yalnızca bir native platform artifact'ı ekleyin. Windows x64, GLIBC 2.17 uyumlu Linux x64 ve macOS 11+ Apple Silicon binary'leri aynı tag kaynak kodundan yeniden üretildi ve doğrulandı. Native ABI `3` olarak kalır.
+```java
+public interface CatalogRepository {
+    @DubboStreamed
+    List<CatalogRow> findAll(CatalogFilter filter);
+}
+```
+
+Tüm framework artifact'larını birlikte yükseltin:
+
+```xml
+<properties>
+  <java-rust-dubbo.version>0.6.0</java-rust-dubbo.version>
+</properties>
+```
+
+Native ABI `3` olarak kalır. Windows x64, GLIBC 2.17 uyumlu Linux x64 ve Apple Silicon macOS 11+ artifact'larının native protokol yüzeyi değişmez.

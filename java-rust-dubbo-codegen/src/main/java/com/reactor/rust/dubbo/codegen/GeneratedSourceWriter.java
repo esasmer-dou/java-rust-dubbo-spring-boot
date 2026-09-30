@@ -252,6 +252,15 @@ final class GeneratedSourceWriter {
             line(source, "        " + codecs.writeCall(signature.getParameterTypes().get(index),
                     "out", "arg" + index) + ';');
         }
+        if (method.streamed()) {
+            DeclaredType listType = (DeclaredType) signature.getReturnType();
+            TypeMirror itemType = listType.getTypeArguments().get(0);
+            line(source, "        return invokeStreamedList(" + method.id()
+                    + ", call, in -> " + codecs.readCall(itemType, "in") + ");");
+            line(source, "      }");
+            line(source, "    }");
+            return;
+        }
         if (isErasure(signature.getReturnType(), "java.util.concurrent.CompletableFuture")) {
             TypeMirror valueType;
             try {
@@ -499,6 +508,9 @@ final class GeneratedSourceWriter {
         StringBuilder value = new StringBuilder();
         for (RustDubboProcessor.ReferenceContract reference : references) {
             value.append('R').append(clientKey(reference)).append(reference.check());
+            for (RustDubboProcessor.MethodContract method : reference.methods()) {
+                value.append(method.id()).append(method.streamed());
+            }
         }
         for (RustDubboProcessor.ServiceContract service : services) {
             value.append('S').append(service.implementation()).append(service.contract())

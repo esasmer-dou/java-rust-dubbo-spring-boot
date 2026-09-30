@@ -30,6 +30,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
     private static final String REFERENCE = "com.reactor.rust.dubbo.annotation.DubboReference";
     private static final String SERVICE = "com.reactor.rust.dubbo.annotation.DubboService";
     private static final String ENABLE = "com.reactor.rust.dubbo.annotation.EnableDubbo";
+    private static final String STREAMED = "com.reactor.rust.dubbo.annotation.DubboStreamed";
     private static final String APACHE_REFERENCE = "org.apache.dubbo.config.annotation.DubboReference";
     private static final String APACHE_SERVICE = "org.apache.dubbo.config.annotation.DubboService";
     private static final String APACHE_ENABLE =
@@ -41,7 +42,8 @@ public final class RustDubboProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return Set.of(REFERENCE, SERVICE, ENABLE, APACHE_REFERENCE, APACHE_SERVICE, APACHE_ENABLE);
+        return Set.of(REFERENCE, SERVICE, ENABLE, STREAMED,
+                APACHE_REFERENCE, APACHE_SERVICE, APACHE_ENABLE);
     }
 
     @Override
@@ -221,8 +223,13 @@ public final class RustDubboProcessor extends AbstractProcessor {
                 String identity = processingEnv.getElementUtils().getBinaryName(contract) + "#"
                         + method.getSimpleName() + descriptor;
                 String key = method.getSimpleName() + descriptor;
+                boolean streamed = hasAnnotation(method, STREAMED);
+                if (streamed && !isConcreteList(type.getReturnType())) {
+                    error(method, "@DubboStreamed requires a synchronous java.util.List<T> return type");
+                    streamed = false;
+                }
                 result.putIfAbsent(key, new MethodContract(method.getSimpleName().toString(), descriptor,
-                        StableIds.fnv1a32(identity), method, type));
+                        StableIds.fnv1a32(identity), method, type, streamed));
             } catch (IllegalArgumentException exception) {
                 error(method, exception.getMessage());
             }
@@ -230,6 +237,24 @@ public final class RustDubboProcessor extends AbstractProcessor {
         List<MethodContract> sorted = new ArrayList<>(result.values());
         sorted.sort(Comparator.comparing(MethodContract::name).thenComparing(MethodContract::descriptor));
         return List.copyOf(sorted);
+    }
+
+    private boolean isConcreteList(TypeMirror type) {
+        if (!(type instanceof DeclaredType declared) || declared.getTypeArguments().size() != 1) {
+            return false;
+        }
+        TypeElement list = processingEnv.getElementUtils().getTypeElement("java.util.List");
+        return list != null && processingEnv.getTypeUtils().isSameType(
+                processingEnv.getTypeUtils().erasure(type),
+                processingEnv.getTypeUtils().erasure(list.asType()))
+                && !declared.getTypeArguments().get(0).getKind().isPrimitive()
+                && declared.getTypeArguments().get(0).getKind() != javax.lang.model.type.TypeKind.WILDCARD
+                && declared.getTypeArguments().get(0).getKind() != javax.lang.model.type.TypeKind.TYPEVAR;
+    }
+
+    private static boolean hasAnnotation(Element element, String annotationName) {
+        return element.getAnnotationMirrors().stream()
+                .anyMatch(annotation -> annotation.getAnnotationType().toString().equals(annotationName));
     }
 
     private void writeIndex() {
@@ -291,7 +316,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
     }
 
     record MethodContract(String name, String descriptor, int id, ExecutableElement element,
-                          ExecutableType type) {}
+                          ExecutableType type, boolean streamed) {}
     record ReferenceContract(String owner, String field, String contract, String group,
                              String version, boolean check, TypeElement contractElement,
                              List<MethodContract> methods) {}
