@@ -85,8 +85,9 @@ admission permit remain owned until the Java operation actually completes. Write
 Set a compatible timeout on the consumer as well.
 
 Use the matching `0.7.0` DLL/SO/dylib for method deadlines. Native ABI stays `3`; new entry points
-are additive. The optional Glowroot `0.6.0` adapter is prepared but is not published yet.
-The provider telemetry SPI is ready; Dubbo `0.7.0` works independently without that agent.
+are additive. The optional [Glowroot `0.6.0` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0)
+is published. Add `java-rust-glowroot-spring-native-dubbo-adapter:0.6.0` to observe providers.
+Dubbo `0.7.0` also works independently without that agent; no agent runtime is added transitively.
 
 Streaming iterators are one-pass. A second consumption attempt fails with a clear message.
 Only the current item's reference window remains decoder-owned. References inside that item work.
