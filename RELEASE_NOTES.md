@@ -31,8 +31,9 @@ allocation is added. A 10,000-row regression test checks the decoder retains at 
 list and current row instead of 10,001 object references.
 
 The provider telemetry SPI is available in 0.7.0. The matching Glowroot 0.6.0 native-Dubbo
-adapter is prepared but not yet published; its memory qualification is still open. Dubbo
-0.7.0 works independently and does not require that agent release.
+adapter is published. Enable it only when provider telemetry is needed. Dubbo 0.7.0
+works independently and does not require the agent. See the agent release notes for
+the measured memory budget and its limits; this is not an always-below-3-MiB guarantee.
 
 Upgrade all framework artifacts and the annotation processor to `0.7.0`; rebuild the application.
 Use the matching Windows x64 DLL, Linux x64 GLIBC 2.17 SO, or macOS ARM64 dylib.
@@ -52,9 +53,10 @@ Kesirli double değerleri ve tarih/saat içeren sonuçlardaki nesne referanslar�
 Tek geçişli tüketim biten öğeleri bellekte tutmaz. Öğeler arası referans içeren sonucu normal
 List olarak okuyun. Böyle bir referans tek geçişli modda açık hata verir. İkinci parse geçişi
 veya öğe başına weak-reference allocation eklenmez.
-Provider telemetri arayüzü 0.7.0 ile kullanılabilir. Uygun Glowroot 0.6.0 adaptörü hazırlandı,
-ancak bellek kontrolü tamamlanmadığı için henüz yayımlanmadı. Dubbo 0.7.0 bu agent sürümünü
-beklemeden bağımsız çalışır. Runtime'a agent bağımlılığı eklenmez.
+Provider telemetri arayüzü 0.7.0 ile kullanılabilir. Uygun Glowroot 0.6.0 adaptörü yayımlandı.
+Yalnız provider telemetrisi gerektiğinde açın. Dubbo 0.7.0 agent olmadan da çalışır.
+Ölçülen bellek bütçesi ve sınırları agent sürüm notlarındadır. Her koşulda 3 MiB altında
+kalacağı garanti edilmez. Runtime'a zorunlu agent bağımlılığı eklenmez.
 
 Tüm framework paketlerini ve annotation processor sürümünü `0.7.0` yapın. Uygulamayı yeniden
 derleyin. Aynı sürümün DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
