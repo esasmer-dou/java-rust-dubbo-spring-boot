@@ -69,6 +69,7 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
             throw new IllegalStateException(ONE_PASS_ITERATOR_MESSAGE);
         }
         mode = Mode.STREAMING;
+        input.beginStreamingReferenceWindow();
         return new Iterator<>() {
             @Override
             public boolean hasNext() {
@@ -136,12 +137,13 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
             return input.hasMoreListEntries(declaredSize, decodedItems);
         } catch (RuntimeException failure) {
             fail();
-            return false;
+            throw failure;
         }
     }
 
     private E decodeNext() {
         try {
+            if (mode == Mode.STREAMING) input.discardConsumedStreamingReferences();
             E value = decoder.decode(input);
             decodedItems = Math.incrementExact(decodedItems);
             return value;

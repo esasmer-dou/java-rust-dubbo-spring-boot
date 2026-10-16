@@ -24,6 +24,12 @@ full-width doubles for mixed-peer compatibility. Typed/generated and dynamic ref
 stay aligned across records, collections and temporal values. Unsupported immutable cycles
 fail explicitly rather than using reflective construction.
 
+One-pass consumers retain only the current item's reference window, not every completed DTO.
+References within one item work. Cross-item references require normal List materialization before
+opening the iterator; one-pass mode rejects them explicitly. No second parse or weak-reference
+allocation is added. A 10,000-row regression test checks the decoder retains at most the root
+list and current row instead of 10,001 object references.
+
 The optional Glowroot 0.6.0 native-Dubbo adapter can record provider business completion as
 `Dubbo Provider` transactions. The Dubbo runtime itself does not depend on Glowroot.
 
@@ -42,6 +48,9 @@ yüzünden durdurulmaz veya geri alınmaz. JDBC timeout'unu ve idempotency kural
 Java tamamlanana kadar native buffer ve concurrency izni korunur.
 
 Kesirli double değerleri ve tarih/saat içeren sonuçlardaki nesne referansları düzeltildi.
+Tek geçişli tüketim biten öğeleri bellekte tutmaz. Öğeler arası referans içeren sonucu normal
+List olarak okuyun. Böyle bir referans tek geçişli modda açık hata verir. İkinci parse geçişi
+veya öğe başına weak-reference allocation eklenmez.
 İsteğe bağlı Glowroot 0.6.0 adaptörü provider işlemlerini `Dubbo Provider` türünde gösterir.
 Dubbo runtime'a agent bağımlılığı eklenmez.
 

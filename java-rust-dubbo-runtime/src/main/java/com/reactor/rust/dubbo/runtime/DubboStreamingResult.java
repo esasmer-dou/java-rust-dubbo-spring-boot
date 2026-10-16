@@ -17,6 +17,8 @@ public interface DubboStreamingResult<E> extends List<E>, AutoCloseable {
      * Opens the one-pass consumer iterator. Requesting it again after streaming
      * starts throws an {@link IllegalStateException} that identifies the one-pass rule.
      * A result already materialized through regular list operations remains repeatable.
+     * Completed items are released from the decoder's reference window. Wire references to
+     * previous items require normal List materialization instead of one-pass iteration.
      */
     Iterator<E> streamingIterator();
 

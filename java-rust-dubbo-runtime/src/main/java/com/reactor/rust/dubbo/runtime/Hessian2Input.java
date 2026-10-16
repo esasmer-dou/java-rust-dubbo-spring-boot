@@ -33,6 +33,9 @@ public final class Hessian2Input {
     private int classCount;
     private List<String> types = new ArrayList<>(4);
     private List<Object> references = new ArrayList<>(16);
+    private int streamingReferencePrefix = -1;
+    private int discardedReferences;
+    private boolean oversizedReferenceWindow;
     private int maxCollectionItems = 100_000;
 
     public void attach(ByteBuffer source, int length, int collectionLimit) {
@@ -523,14 +526,44 @@ public final class Hessian2Input {
     }
 
     private int reserveReference() {
-        int index = references.size();
+        int index = referenceCount();
         references.add(UNRESOLVED_REFERENCE);
         return index;
     }
 
     /** Index of the next reference-bearing value, before reading its header. */
     public int referenceCount() {
-        return references.size();
+        return references.size() + discardedReferences;
+    }
+
+    void beginStreamingReferenceWindow() {
+        streamingReferencePrefix = references.size();
+    }
+
+    void discardConsumedStreamingReferences() {
+        if (streamingReferencePrefix < 0) return;
+        int size = references.size();
+        int consumed = size - streamingReferencePrefix;
+        if (consumed == 0) return;
+        oversizedReferenceWindow |= size > 1_024;
+        for (int index = size - 1; index >= streamingReferencePrefix; index--) {
+            references.remove(index);
+        }
+        discardedReferences += consumed;
+    }
+
+    int retainedReferenceCount() { return references.size(); }
+
+    private int referenceOffset(int index) {
+        if (streamingReferencePrefix >= 0 && index >= streamingReferencePrefix) {
+            if (index < streamingReferencePrefix + discardedReferences) {
+                throw new DubboCodecException("One-pass streaming cannot resolve a Hessian reference "
+                        + "to a previous item; use regular List operations before streamingIterator() "
+                        + "to materialize a result with cross-item references");
+            }
+            return index - discardedReferences;
+        }
+        return index;
     }
 
     public boolean isReference() {
@@ -541,6 +574,7 @@ public final class Hessian2Input {
         byte tag = get();
         if (tag != 'Q') throw unexpected("reference", tag);
         int index = readInt();
+        index = referenceOffset(index);
         if (index < 0 || index >= references.size()) {
             throw new DubboCodecException("Invalid Hessian object reference " + index);
         }
@@ -553,6 +587,7 @@ public final class Hessian2Input {
     }
 
     public <T> T completeReference(int index, T value) {
+        index = referenceOffset(index);
         if (index < 0 || index >= references.size()) {
             throw new DubboCodecException("Invalid Hessian reference slot " + index);
         }
@@ -604,9 +639,12 @@ public final class Hessian2Input {
 
         int referenceCount = references.size();
         references.clear();
-        if (referenceCount > 1_024) {
+        if (referenceCount > 1_024 || oversizedReferenceWindow) {
             references = new ArrayList<>(16);
         }
+        streamingReferencePrefix = -1;
+        discardedReferences = 0;
+        oversizedReferenceWindow = false;
     }
 
     private int readIntTag(byte tag) {

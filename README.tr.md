@@ -88,6 +88,10 @@ Yeni girişler mevcut API'ye eklenir. İsteğe bağlı Glowroot `0.6.0` native-D
 işinin tamamlanmasını ölçer. Core Dubbo runtime'a agent bağımlılığı eklenmez.
 
 Streaming iterator yalnız bir kez tüketilir. İkinci denemede açık hata mesajı verilir.
+Decoder yalnız o anki öğenin referanslarını tutar. Aynı öğe içindeki referanslar çalışır.
+Cevap önceki öğelere referans veriyorsa iterator açmadan önce normal `List` işlemlerini kullanın.
+Tek geçişli mod bütün DTO'ları gizlice tutmaz; öğeler arası referansta açık hata verir.
+Kesik listeler başarılı kısmi sonuç olarak gösterilmez. Açık codec hatası alınır.
 Ham `ApiResponse` veya `List` yerine `ApiResponse<MyDto>` ve `List<MyDto>` gibi somut tip kullanın.
 
 ### 0.6.0 Sürümünde Ne Değişti?

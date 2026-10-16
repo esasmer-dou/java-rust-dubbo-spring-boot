@@ -2,6 +2,9 @@
 
 ## 0.7.0 - 2026-10-16
 
+- Keep one-pass decoding bounded to the current item's reference window. Cross-item references require normal List materialization; no complete DTO graph is silently retained.
+- Reject truncated variable-length lists instead of returning a successful partial result.
+
 - Correct standard Hessian2 integer-thousandth double decoding and use full-width fractional double output for mixed-peer compatibility.
 - Keep typed/generated object, list, map, enum, array, and temporal reference slots aligned with dynamic `Q` references; preserve mutable cyclic objects such as Throwable causes.
 - Add build-time `@DubboService(timeout=...)` and per-implementation-method `@DubboMethod(timeoutMs=...)` deadlines, including queue wait and asynchronous completion.

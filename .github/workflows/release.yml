@@ -42,6 +42,9 @@ jobs:
             exit 1
           fi
           sha256sum --check NATIVE_SHA256SUMS
+          grep -qx "release.version=$version" NATIVE_PROVENANCE.properties
+          grep -qx 'spring-dubbo.abi=3' NATIVE_PROVENANCE.properties
+          grep -Eq '^source.revision=[0-9a-f]{40}$' NATIVE_PROVENANCE.properties
       - name: Detect an existing complete Maven release
         id: maven-release
         shell: bash
@@ -118,6 +121,7 @@ jobs:
             -DoutputFormat=json -DschemaVersion=1.6 -DincludeTestScope=false \
             -DoutputName="java-rust-dubbo-spring-boot-$version-maven-sbom"
           mkdir -p release-assets
+          cp NATIVE_PROVENANCE.properties release-assets/
           cp java-rust-dubbo-native-windows-x64/src/main/resources/native/rust_dubbo-windows-x64.dll release-assets/
           cp java-rust-dubbo-native-linux-x64/src/main/resources/native/librust_dubbo-linux-x64.so release-assets/
           cp java-rust-dubbo-native-macos-aarch64/src/main/resources/native/librust_dubbo-macos-aarch64.dylib release-assets/

@@ -89,6 +89,10 @@ are additive. The optional Glowroot `0.6.0` native-Dubbo adapter can observe pro
 completion; the core Dubbo runtime itself has no agent dependency.
 
 Streaming iterators are one-pass. A second consumption attempt fails with a clear message.
+Only the current item's reference window remains decoder-owned. References inside that item work.
+If the wire response references earlier items, use regular `List` operations before opening the
+iterator. One-pass mode rejects cross-item references explicitly instead of retaining all DTOs.
+Malformed/truncated lists fail with a codec error, not a successful partial result.
 Declare concrete generic types such as `ApiResponse<MyDto>` and `List<MyDto>`, not raw containers.
 
 ### What Changed In 0.6.0
