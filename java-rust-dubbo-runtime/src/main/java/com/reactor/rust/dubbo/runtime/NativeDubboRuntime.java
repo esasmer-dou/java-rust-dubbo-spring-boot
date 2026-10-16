@@ -130,10 +130,17 @@ public final class NativeDubboRuntime implements AutoCloseable {
     public void registerProviderMethod(int serviceId, int methodId, String service, String group,
                                        String version, String method, String descriptor,
                                        String executor, int annotatedMaxConcurrent) {
+        registerProviderMethod(serviceId, methodId, service, group, version, method, descriptor,
+                executor, annotatedMaxConcurrent, 0);
+    }
+
+    public void registerProviderMethod(int serviceId, int methodId, String service, String group,
+                                       String version, String method, String descriptor,
+                                       String executor, int annotatedMaxConcurrent, int timeoutMs) {
         ensureOpen();
         NativeDubboBridge.registerProviderMethod(serviceId, methodId, service, group, version,
                 method, descriptor, executor, annotatedMaxConcurrent > 0
-                        ? annotatedMaxConcurrent : providerOptions.maxConcurrent(executor));
+                        ? annotatedMaxConcurrent : providerOptions.maxConcurrent(executor), timeoutMs);
     }
 
     public synchronized void startProvider(int port, int ioWorkers, int businessWorkers,

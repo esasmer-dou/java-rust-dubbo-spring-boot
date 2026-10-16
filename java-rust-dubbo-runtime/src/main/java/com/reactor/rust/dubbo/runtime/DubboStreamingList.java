@@ -13,6 +13,10 @@ import java.util.List;
  */
 public interface DubboStreamingList<E> extends List<E>, AutoCloseable {
 
+    /**
+     * Opens the one-pass provider iterator. Implementations must reject a second
+     * request with an {@link IllegalStateException} that identifies the one-pass rule.
+     */
     Iterator<E> streamingIterator();
 
     @Override

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 - 2026-10-16
+
+- Correct standard Hessian2 integer-thousandth double decoding and use full-width fractional double output for mixed-peer compatibility.
+- Keep typed/generated object, list, map, enum, array, and temporal reference slots aligned with dynamic `Q` references; preserve mutable cyclic objects such as Throwable causes.
+- Add build-time `@DubboService(timeout=...)` and per-implementation-method `@DubboMethod(timeoutMs=...)` deadlines, including queue wait and asynchronous completion.
+- Keep native response buffers and admission permits alive until actual business completion after a network timeout. Do not start expired queued work or replay timed-out writes.
+- Expose a startup-bound provider telemetry SPI for the optional Glowroot native-Dubbo adapter, without introducing an agent, Apache Dubbo, Netty, or reflection dependency into the runtime.
+- Preserve native ABI `3` and the original JNI registration entry point. Method deadlines require a rebuilt native library with the additive timeout entry point.
+
 ## 0.6.0 - 2026-09-30
 
 - Add compile-time `@DubboStreamed` validation for synchronous concrete `List<T>` contract methods.
@@ -82,6 +91,6 @@
 - Added GitHub Packages publication, source JARs, Java/Rust SBOMs, checksums, and an empty-cache consumer gate.
 - Added CI, pinned GitHub Actions, Dependabot, stable release notes, and durable release evidence.
 - Added an automated 10,000-call Spring Boot container RPC gate. Benchmark images now consume a version-independent `target/app.jar` to prevent stale snapshot artifacts.
-- Kept enterprise compatibility profiles opt-in because they require private application artifacts. Those artifacts are not part of the framework package or its standalone release workflow.
+- Keep internal compatibility profiles opt-in. Private application artifacts are not part of the framework package or the standalone release workflow.
 
 This is the first stable release.

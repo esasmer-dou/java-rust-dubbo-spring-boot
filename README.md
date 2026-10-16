@@ -49,7 +49,47 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.6.0`.
+Current release: `0.7.0`.
+
+### What Changed In 0.7.0
+
+Fractional doubles and repeated object references now stay correct when calling supported Apache
+Dubbo/Hessian peers. Upgrade the annotation processor and runtime together, then rebuild your app.
+Do not restore the official Java Hessian or Netty runtime to work around codec errors.
+
+Provider deadlines can be defined per service and overridden on implementation methods:
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboService;
+import com.reactor.rust.dubbo.annotation.DubboMethod;
+
+@DubboService(timeout = 1500)
+public final class CatalogServiceImpl implements CatalogService {
+    private final CatalogRepository repository;
+
+    public CatalogServiceImpl(CatalogRepository repository) { this.repository = repository; }
+
+    @Override
+    @DubboMethod(timeoutMs = 300)
+    public CatalogView find(long id) { return repository.find(id); }
+}
+```
+
+`find` uses 300 ms. Other methods inherit 1500 ms. Without either setting, the provider's global
+request timeout applies. Queue wait and async completion consume the same budget. Overloaded methods
+are matched by their complete signature during the build, not through runtime reflection.
+
+A timed-out queued call does not start. A running DB operation is not interrupted or rolled back
+by a network timeout. Keep JDBC deadlines and idempotency explicit. Native response memory and the
+admission permit remain owned until the Java operation actually completes. Writes are never replayed.
+Set a compatible timeout on the consumer as well.
+
+Use the matching `0.7.0` DLL/SO/dylib for method deadlines. Native ABI stays `3`; new entry points
+are additive. The optional Glowroot `0.6.0` native-Dubbo adapter can observe provider business
+completion; the core Dubbo runtime itself has no agent dependency.
+
+Streaming iterators are one-pass. A second consumption attempt fails with a clear message.
+Declare concrete generic types such as `ApiResponse<MyDto>` and `List<MyDto>`, not raw containers.
 
 ### What Changed In 0.6.0
 
@@ -123,7 +163,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.6.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.7.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>

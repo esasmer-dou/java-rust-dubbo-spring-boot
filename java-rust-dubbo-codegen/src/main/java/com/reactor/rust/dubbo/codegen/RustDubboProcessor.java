@@ -137,7 +137,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
         AnnotationValues values = AnnotationValues.of(implementation, annotationName);
         if (!values.rejectUnsupported(implementation, Set.of(
                 "interfaceClass", "interfaceName", "version", "group", "export", "async",
-                "executes", "executor"), processingEnv)) {
+                "executes", "executor", "timeout"), processingEnv)) {
             return;
         }
         TypeElement contract = resolveServiceContract(implementation, values);
@@ -154,7 +154,32 @@ public final class RustDubboProcessor extends AbstractProcessor {
         services.put(implementationName, new ServiceContract(implementationName, contractName,
                 values.string("group"), values.string("version"), values.string("executor"),
                 values.bool("async", false), values.bool("export", true), values.integer("executes", -1),
-                implementation, contract, methods(contract)));
+                implementation, contract, providerMethods(implementation, contract, values)));
+    }
+
+    private List<MethodContract> providerMethods(TypeElement implementation, TypeElement contract,
+                                                AnnotationValues service) {
+        int defaultTimeout = service.integer("timeout", 0);
+        if (defaultTimeout < 0) error(implementation, "@DubboService timeout must not be negative");
+        List<MethodContract> methods = new ArrayList<>();
+        for (MethodContract method : methods(contract)) {
+            int timeout = defaultTimeout;
+            for (Element member : processingEnv.getElementUtils().getAllMembers(implementation)) {
+                if (member instanceof ExecutableElement candidate
+                        && processingEnv.getElementUtils().overrides(candidate, method.element(), implementation)) {
+                    AnnotationValues override = AnnotationValues.of(candidate,
+                            "com.reactor.rust.dubbo.annotation.DubboMethod");
+                    if (hasAnnotation(candidate, "com.reactor.rust.dubbo.annotation.DubboMethod")) {
+                        timeout = override.integer("timeoutMs", 0);
+                        if (timeout <= 0) error(candidate, "@DubboMethod timeoutMs must be positive");
+                    }
+                    break;
+                }
+            }
+            methods.add(new MethodContract(method.name(), method.descriptor(), method.id(),
+                    method.element(), method.type(), method.streamed(), timeout));
+        }
+        return List.copyOf(methods);
     }
 
     private TypeElement resolveServiceContract(TypeElement implementation, AnnotationValues values) {
@@ -229,7 +254,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
                     streamed = false;
                 }
                 result.putIfAbsent(key, new MethodContract(method.getSimpleName().toString(), descriptor,
-                        StableIds.fnv1a32(identity), method, type, streamed));
+                        StableIds.fnv1a32(identity), method, type, streamed, 0));
             } catch (IllegalArgumentException exception) {
                 error(method, exception.getMessage());
             }
@@ -316,7 +341,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
     }
 
     record MethodContract(String name, String descriptor, int id, ExecutableElement element,
-                          ExecutableType type, boolean streamed) {}
+                          ExecutableType type, boolean streamed, int timeoutMs) {}
     record ReferenceContract(String owner, String field, String contract, String group,
                              String version, boolean check, TypeElement contractElement,
                              List<MethodContract> methods) {}

@@ -8,6 +8,9 @@ import java.util.Objects;
 
 final class NativeStreamingResultList<E> extends AbstractList<E>
         implements DubboStreamingResult<E> {
+    private static final String ONE_PASS_ITERATOR_MESSAGE =
+            "Dubbo streaming iteration is one-pass; streamingIterator() may be requested only once";
+
     private final Hessian2Input input;
     private final NativeResponseDecoder<E> decoder;
     private final int declaredSize;
@@ -34,6 +37,7 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
         this.decoder = Objects.requireNonNull(decoder, "decoder");
         this.declaredSize = declaredSize;
         this.releaseAction = Objects.requireNonNull(releaseAction, "releaseAction");
+        input.completeReference(input.referenceCount() - 1, this);
     }
 
     @Override
@@ -62,7 +66,7 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
             return materialized.iterator();
         }
         if (mode != Mode.READY) {
-            throw new IllegalStateException("Dubbo streaming result is already consumed or closed");
+            throw new IllegalStateException(ONE_PASS_ITERATOR_MESSAGE);
         }
         mode = Mode.STREAMING;
         return new Iterator<>() {
@@ -174,7 +178,8 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
     private void requireListMode() {
         if (mode == Mode.STREAMING || mode == Mode.CONSUMED) {
             throw new IllegalStateException(
-                    "Regular List operations are unavailable after streaming iteration starts");
+                    "Dubbo streaming iteration is one-pass; regular List operations are unavailable "
+                            + "after streamingIterator() starts");
         }
         if (mode == Mode.CLOSED) {
             throw new IllegalStateException("Dubbo streaming result is closed");
@@ -183,7 +188,9 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
 
     private void requireStreamingMode() {
         if (mode != Mode.STREAMING) {
-            throw new IllegalStateException("Dubbo streaming result is not open for streaming");
+            throw new IllegalStateException(
+                    "Dubbo streaming iteration is one-pass; the iterator cannot be used after "
+                            + "the result is consumed or closed");
         }
     }
 

@@ -125,9 +125,8 @@ public final class Hessian2Output {
             buffer.put((byte) 0x5d).put((byte) value);
         } else if (value == Math.rint(value) && value >= Short.MIN_VALUE && value <= Short.MAX_VALUE) {
             buffer.put((byte) 0x5e).putShort((short) value);
-        } else if ((double) (float) value == value) {
-            buffer.put((byte) 0x5f).putFloat((float) value);
         } else {
+            // Full doubles are interoperable with Java and older Reactor readers.
             buffer.put((byte) 'D').putDouble(value);
         }
     }

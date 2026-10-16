@@ -49,7 +49,46 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.6.0`.
+Güncel sürüm: `0.7.0`.
+
+### 0.7.0 Sürümünde Ne Değişti?
+
+Kesirli double değerleri ve aynı nesneye tekrarlayan referanslar düzeltildi. Desteklenen Apache
+Dubbo/Hessian eşleriyle doğru sonuç alınır. Annotation processor ve runtime sürümünü birlikte
+yükseltin. Uygulamayı yeniden derleyin. Codec hatasını aşmak için Java Hessian veya Netty eklemeyin.
+
+Provider için servis ve metot bazında ayrı timeout tanımlayabilirsiniz:
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboService;
+import com.reactor.rust.dubbo.annotation.DubboMethod;
+
+@DubboService(timeout = 1500)
+public final class CatalogServiceImpl implements CatalogService {
+    private final CatalogRepository repository;
+
+    public CatalogServiceImpl(CatalogRepository repository) { this.repository = repository; }
+
+    @Override
+    @DubboMethod(timeoutMs = 300)
+    public CatalogView find(long id) { return repository.find(id); }
+}
+```
+
+`find` için 300 ms kullanılır. Diğer metotlar servisteki 1500 ms değerini alır. İkisi de verilmezse
+provider'ın genel request timeout'u geçerlidir. Kuyruk ve async tamamlanma bu süreye dahildir.
+Farklı parametreli aynı adlı metotlar build sırasında ayrı eşleşir. Runtime reflection eklenmez.
+
+Kuyrukta süresi dolan iş başlatılmaz. Başlamış DB işlemi ağ timeout'u ile kesilmez veya geri alınmaz.
+JDBC timeout'unu ve idempotency kuralını ayrıca belirleyin. Java tamamlanana kadar native cevap belleği
+ve concurrency izni korunur. Yazma işlemi kendiliğinden tekrarlanmaz. Consumer timeout'unu da ayarlayın.
+
+Metot timeout'u için aynı sürümün `0.7.0` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
+Yeni girişler mevcut API'ye eklenir. İsteğe bağlı Glowroot `0.6.0` native-Dubbo adaptörü provider
+işinin tamamlanmasını ölçer. Core Dubbo runtime'a agent bağımlılığı eklenmez.
+
+Streaming iterator yalnız bir kez tüketilir. İkinci denemede açık hata mesajı verilir.
+Ham `ApiResponse` veya `List` yerine `ApiResponse<MyDto>` ve `List<MyDto>` gibi somut tip kullanın.
 
 ### 0.6.0 Sürümünde Ne Değişti?
 
@@ -123,7 +162,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.6.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.7.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>

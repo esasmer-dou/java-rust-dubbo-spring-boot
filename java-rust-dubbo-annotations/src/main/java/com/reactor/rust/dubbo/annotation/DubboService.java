@@ -28,4 +28,7 @@ public @interface DubboService {
     int executes() default -1;
 
     String executor() default "";
+
+    /** Zero inherits the configured provider timeout. A method annotation overrides this value. */
+    int timeout() default 0;
 }

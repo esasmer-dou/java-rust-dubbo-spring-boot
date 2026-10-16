@@ -3,6 +3,8 @@ package com.reactor.rust.dubbo.spring;
 import com.reactor.rust.dubbo.runtime.DubboClientRegistry;
 import com.reactor.rust.dubbo.runtime.DubboBeanResolver;
 import com.reactor.rust.dubbo.runtime.DubboProviderRegistry;
+import com.reactor.rust.dubbo.runtime.DubboProviderTelemetry;
+import org.springframework.beans.factory.ObjectProvider;
 import com.reactor.rust.dubbo.runtime.GeneratedDubboModule;
 import com.reactor.rust.dubbo.runtime.NativeDubboRuntime;
 import java.util.List;
@@ -34,8 +36,8 @@ public class RustDubboAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    DubboProviderRegistry dubboProviderRegistry() {
-        return new DubboProviderRegistry();
+    DubboProviderRegistry dubboProviderRegistry(ObjectProvider<DubboProviderTelemetry> telemetry) {
+        return new DubboProviderRegistry(telemetry.getIfAvailable(() -> DubboProviderTelemetry.NONE));
     }
 
     @Bean

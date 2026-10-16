@@ -5,6 +5,13 @@ import java.util.Map;
 
 public final class DubboProviderRegistry implements NativeDubboDispatcher {
     private final Map<Integer, NativeDubboDispatcher> dispatchers = new HashMap<>();
+    private final DubboProviderTelemetry telemetry;
+
+    public DubboProviderRegistry() { this(DubboProviderTelemetry.NONE); }
+    public DubboProviderRegistry(DubboProviderTelemetry telemetry) {
+        this.telemetry = java.util.Objects.requireNonNull(telemetry, "telemetry");
+    }
+    public DubboProviderTelemetry telemetry() { return telemetry; }
 
     public void register(int serviceId, NativeDubboDispatcher dispatcher) {
         if (serviceId <= 0) {

@@ -25,6 +25,7 @@ public final class Hessian2Input {
     private static final String[] DATE_FIELDS = {"year", "month", "day"};
     private static final String[] TIME_FIELDS = {"hour", "minute", "second", "nano"};
     private static final String[] DATE_TIME_FIELDS = {"date", "time"};
+    private static final Object UNRESOLVED_REFERENCE = new Object();
 
     private ByteBuffer buffer;
     private String[] classTypes = new String[8];
@@ -118,7 +119,7 @@ public final class Hessian2Input {
             case 0x5c -> 1.0d;
             case 0x5d -> get();
             case 0x5e -> { require(2); yield buffer.getShort(); }
-            case 0x5f -> { require(4); yield buffer.getFloat(); }
+            case 0x5f -> { require(4); yield 0.001d * buffer.getInt(); }
             case 'D' -> { require(8); yield buffer.getDouble(); }
             default -> throw unexpected("double", tag);
         };
@@ -214,6 +215,7 @@ public final class Hessian2Input {
         if (length < -1 || length > maxCollectionItems) {
             throw new DubboCodecException("Hessian list length exceeds configured limit: " + length);
         }
+        reserveReference();
         return length;
     }
 
@@ -236,10 +238,12 @@ public final class Hessian2Input {
     public void readMapStart() {
         byte tag = get();
         if (tag == 'H') {
+            reserveReference();
             return;
         }
         if (tag == 'M') {
             readType();
+            reserveReference();
             return;
         }
         throw unexpected("map", tag);
@@ -271,6 +275,7 @@ public final class Hessian2Input {
             throw new DubboCodecException("Hessian object type mismatch. Expected " + expectedType
                     + " but received " + descriptor.typeName());
         }
+        reserveReference();
         return descriptor.fields();
     }
 
@@ -299,8 +304,10 @@ public final class Hessian2Input {
         if (readNull()) {
             return null;
         }
+        if (isReference()) return (BigDecimal) readReference();
+        int reference = referenceCount();
         expectObject(BIG_DECIMAL, VALUE_FIELD);
-        return new BigDecimal(readString());
+        return completeReference(reference, new BigDecimal(readString()));
     }
 
     public Date readDate() {
@@ -323,6 +330,8 @@ public final class Hessian2Input {
         if (readNull()) {
             return null;
         }
+        if (isReference()) return (LocalDate) readReference();
+        int reference = referenceCount();
         String[] fields = readObjectFields(LOCAL_DATE_HANDLE);
         int year = 0;
         int month = 0;
@@ -335,13 +344,15 @@ public final class Hessian2Input {
                 default -> skipValue();
             }
         }
-        return LocalDate.of(year, month, day);
+        return completeReference(reference, LocalDate.of(year, month, day));
     }
 
     public LocalTime readLocalTime() {
         if (readNull()) {
             return null;
         }
+        if (isReference()) return (LocalTime) readReference();
+        int reference = referenceCount();
         String[] fields = readObjectFields(LOCAL_TIME_HANDLE);
         int hour = 0;
         int minute = 0;
@@ -356,13 +367,15 @@ public final class Hessian2Input {
                 default -> skipValue();
             }
         }
-        return LocalTime.of(hour, minute, second, nano);
+        return completeReference(reference, LocalTime.of(hour, minute, second, nano));
     }
 
     public LocalDateTime readLocalDateTime() {
         if (readNull()) {
             return null;
         }
+        if (isReference()) return (LocalDateTime) readReference();
+        int reference = referenceCount();
         String[] fields = readObjectFields(LOCAL_DATE_TIME_HANDLE);
         LocalDate date = null;
         LocalTime time = null;
@@ -376,7 +389,7 @@ public final class Hessian2Input {
         if (date == null || time == null) {
             throw new DubboCodecException("Incomplete Hessian LocalDateTime handle");
         }
-        return LocalDateTime.of(date, time);
+        return completeReference(reference, LocalDateTime.of(date, time));
     }
 
     public Object readDynamic() {
@@ -387,12 +400,7 @@ public final class Hessian2Input {
             return null;
         }
         if (tag == 'Q') {
-            buffer.get();
-            int index = readInt();
-            if (index < 0 || index >= references.size()) {
-                throw new DubboCodecException("Invalid Hessian object reference " + index);
-            }
-            return references.get(index);
+            return readReference();
         }
         if (tag == 'T' || tag == 'F') {
             return readBoolean();
@@ -418,9 +426,10 @@ public final class Hessian2Input {
         }
         if (unsigned >= 0x70 && unsigned <= 0x7f || tag == 'U' || tag == 'V'
                 || tag == 'W' || tag == 'X') {
+            int reference = referenceCount();
             int size = readListStart();
             List<Object> values = new ArrayList<>(Math.max(size, 0));
-            references.add(values);
+            completeReference(reference, values);
             int index = 0;
             while (hasMoreListEntries(size, index)) {
                 values.add(readDynamic());
@@ -430,9 +439,10 @@ public final class Hessian2Input {
             return values;
         }
         if (tag == 'H' || tag == 'M') {
+            int reference = referenceCount();
             readMapStart();
             Map<Object, Object> values = new LinkedHashMap<>();
-            references.add(values);
+            completeReference(reference, values);
             while (hasMoreMapEntries()) {
                 values.put(readDynamic(), readDynamic());
             }
@@ -498,11 +508,12 @@ public final class Hessian2Input {
                 return completeReference(reference, LocalDateTime.of(date, time));
             }
             Map<String, Object> fields = new LinkedHashMap<>();
+            DynamicDubboObject value = new DynamicDubboObject(descriptor.typeName(), fields);
+            completeReference(reference, value);
             for (String field : descriptor.fields()) {
                 fields.put(field, readDynamic());
             }
-            return completeReference(reference,
-                    new DynamicDubboObject(descriptor.typeName(), fields));
+            return value;
         }
         throw unexpected("dynamic value", tag);
     }
@@ -513,11 +524,38 @@ public final class Hessian2Input {
 
     private int reserveReference() {
         int index = references.size();
-        references.add(null);
+        references.add(UNRESOLVED_REFERENCE);
         return index;
     }
 
-    private <T> T completeReference(int index, T value) {
+    /** Index of the next reference-bearing value, before reading its header. */
+    public int referenceCount() {
+        return references.size();
+    }
+
+    public boolean isReference() {
+        return peek() == 'Q';
+    }
+
+    public Object readReference() {
+        byte tag = get();
+        if (tag != 'Q') throw unexpected("reference", tag);
+        int index = readInt();
+        if (index < 0 || index >= references.size()) {
+            throw new DubboCodecException("Invalid Hessian object reference " + index);
+        }
+        Object value = references.get(index);
+        if (value == UNRESOLVED_REFERENCE) {
+            throw new DubboCodecException("Unresolved Hessian reference " + index
+                    + "; a cyclic immutable value cannot be decoded before construction");
+        }
+        return value;
+    }
+
+    public <T> T completeReference(int index, T value) {
+        if (index < 0 || index >= references.size()) {
+            throw new DubboCodecException("Invalid Hessian reference slot " + index);
+        }
         references.set(index, value);
         return value;
     }

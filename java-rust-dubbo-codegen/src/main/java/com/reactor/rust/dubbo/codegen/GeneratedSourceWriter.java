@@ -30,6 +30,9 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
 final class GeneratedSourceWriter {
+    private static final String CONCRETE_GENERIC_EXAMPLE =
+            " Örn: ham ApiResponse yerine ApiResponse<MyDto> kullanın.";
+
     private static final String GENERATED_PACKAGE = "com.reactor.rust.dubbo.generated";
 
     private final ProcessingEnvironment processing;
@@ -203,14 +206,15 @@ final class GeneratedSourceWriter {
             String dispatcher = dispatcherClass(service);
             line(source, "    providers.register(" + serviceId + ", new " + dispatcher
                     + "(beans.require(" + service.implementation() + ".class), "
-                    + "runtime.clientOptions().maxCollectionItems()));");
+                    + "runtime.clientOptions().maxCollectionItems(), providers.telemetry()));");
             for (RustDubboProcessor.MethodContract method : service.methods()) {
                 line(source, "    runtime.registerProviderMethod(" + serviceId + ", " + method.id()
                         + ", \"" + escape(service.contract()) + "\", \""
                         + escape(service.group()) + "\", \"" + escape(service.version())
                         + "\", \"" + escape(method.name()) + "\", \""
                         + escape(method.descriptor()) + "\", \""
-                        + escape(service.executor()) + "\", " + service.executes() + ");");
+                        + escape(service.executor()) + "\", " + service.executes()
+                        + ", " + method.timeoutMs() + ");");
             }
         }
         line(source, "  }");
@@ -312,10 +316,18 @@ final class GeneratedSourceWriter {
             line(source, "  private static final class " + dispatcherClass(service)
                     + " extends com.reactor.rust.dubbo.runtime.GeneratedDubboProviderSupport {");
             line(source, "    private final " + service.implementation() + " target;");
+            for (var method : service.methods()) {
+                line(source, "    private final com.reactor.rust.dubbo.runtime.DubboProviderTelemetry.Method observation_"
+                        + method.id() + ";");
+            }
             line(source, "    private " + dispatcherClass(service) + '(' + service.implementation()
-                    + " target, int maxCollectionItems) {");
+                    + " target, int maxCollectionItems, com.reactor.rust.dubbo.runtime.DubboProviderTelemetry telemetry) {");
             line(source, "      super(maxCollectionItems);");
             line(source, "      this.target = target;");
+            for (var method : service.methods()) {
+                line(source, "      this.observation_" + method.id() + " = telemetry.method(\""
+                        + escape(service.contract()) + "\", \"" + escape(method.name()) + "\");");
+            }
             line(source, "    }");
             line(source, "    @Override");
             line(source, "    public int dispatch(int serviceId, int methodId, java.nio.ByteBuffer request,"
@@ -350,6 +362,8 @@ final class GeneratedSourceWriter {
                     + codecs.readCall(type, "in") + ';');
         }
         String arguments = argumentNames(signature.getParameterTypes().size());
+        line(source, "            var observation = observation_" + method.id() + ";");
+        line(source, "            long startedAt = observation.start();");
         if (isErasure(signature.getReturnType(), "java.util.concurrent.CompletableFuture")) {
             TypeMirror valueType;
             try {
@@ -361,9 +375,11 @@ final class GeneratedSourceWriter {
             line(source, "            try {");
             line(source, "              future = target." + method.name() + '(' + arguments + ");");
             line(source, "            } catch (Exception exception) {");
+            line(source, "              observation.complete(startedAt, exception);");
             line(source, "              return writeBusinessExceptionResponse(out, exception);");
             line(source, "            }");
             line(source, "            if (future == null) {");
+            line(source, "              observation.complete(startedAt, new IllegalStateException(\"Null provider future\"));");
             line(source, "              com.reactor.rust.dubbo.runtime.NativeDubboBridge.failProviderResponse("
                     + "responseHandle, \"Provider returned a null CompletableFuture\");");
             line(source, "              return ASYNC_PENDING;");
@@ -373,8 +389,10 @@ final class GeneratedSourceWriter {
                 line(source, "              try {");
                 line(source, "                future.join();");
                 line(source, "              } catch (RuntimeException exception) {");
+                line(source, "                observation.complete(startedAt, exception);");
                 line(source, "                return writeBusinessExceptionResponse(out, exception);");
                 line(source, "              }");
+                line(source, "              observation.complete(startedAt, null);");
                 line(source, "              out.writeInt("
                         + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");
             } else {
@@ -382,8 +400,10 @@ final class GeneratedSourceWriter {
                 line(source, "              try {");
                 line(source, "                value = future.join();");
                 line(source, "              } catch (RuntimeException exception) {");
+                line(source, "                observation.complete(startedAt, exception);");
                 line(source, "                return writeBusinessExceptionResponse(out, exception);");
                 line(source, "              }");
+                line(source, "              observation.complete(startedAt, null);");
                 line(source, "              int responseStart = out.position();");
                 line(source, "              try {");
                 line(source, "              if (value == null) {");
@@ -401,6 +421,7 @@ final class GeneratedSourceWriter {
             }
             line(source, "            } else {");
             line(source, "              future.whenComplete((value, error) -> {");
+            line(source, "              observation.complete(startedAt, error);");
             line(source, "              if (error != null) {");
             line(source, "                completeBusinessExceptionResponse(responseHandle, error);");
             line(source, "                return;");
@@ -437,8 +458,10 @@ final class GeneratedSourceWriter {
             line(source, "            try {");
             line(source, "              target." + method.name() + '(' + arguments + ");");
             line(source, "            } catch (Exception exception) {");
+            line(source, "              observation.complete(startedAt, exception);");
             line(source, "              return writeBusinessExceptionResponse(out, exception);");
             line(source, "            }");
+            line(source, "            observation.complete(startedAt, null);");
             line(source, "            out.writeInt("
                     + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_NULL_VALUE);");
         } else if (signature.getReturnType().getKind().isPrimitive()) {
@@ -446,8 +469,10 @@ final class GeneratedSourceWriter {
             line(source, "            try {");
             line(source, "              value = target." + method.name() + '(' + arguments + ");");
             line(source, "            } catch (Exception exception) {");
+            line(source, "              observation.complete(startedAt, exception);");
             line(source, "              return writeBusinessExceptionResponse(out, exception);");
             line(source, "            }");
+            line(source, "            observation.complete(startedAt, null);");
             line(source, "            out.writeInt("
                     + "com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport.RESPONSE_VALUE);");
             line(source, "            " + codecs.writeCall(signature.getReturnType(), "out", "value") + ';');
@@ -456,8 +481,10 @@ final class GeneratedSourceWriter {
             line(source, "            try {");
             line(source, "              value = target." + method.name() + '(' + arguments + ");");
             line(source, "            } catch (Exception exception) {");
+            line(source, "              observation.complete(startedAt, exception);");
             line(source, "              return writeBusinessExceptionResponse(out, exception);");
             line(source, "            }");
+            line(source, "            observation.complete(startedAt, null);");
             line(source, "            int responseStart = out.position();");
             line(source, "            try {");
             line(source, "              if (value == null) {");
@@ -516,6 +543,7 @@ final class GeneratedSourceWriter {
             value.append('S').append(service.implementation()).append(service.contract())
                     .append(service.group()).append(service.version()).append(service.executor())
                     .append(service.async()).append(service.export()).append(service.executes());
+            for (var method : service.methods()) value.append(method.id()).append(':').append(method.timeoutMs());
         }
         return value.toString();
     }
@@ -543,14 +571,19 @@ final class GeneratedSourceWriter {
         return expected != null && types.isSameType(types.erasure(type), types.erasure(expected.asType()));
     }
 
+    private static boolean isConcreteGenericArgument(TypeMirror type) {
+        return type.getKind() != TypeKind.WILDCARD && type.getKind() != TypeKind.TYPEVAR;
+    }
+
     private TypeMirror futureValueType(TypeMirror type, Element usage) throws IOException {
         if (!(type instanceof DeclaredType declared) || declared.getTypeArguments().size() != 1) {
             return fail(usage, "CompletableFuture Dubbo methods must declare one concrete result type: "
-                    + type);
+                    + type + CONCRETE_GENERIC_EXAMPLE);
         }
         TypeMirror valueType = declared.getTypeArguments().get(0);
         if (valueType.getKind() == TypeKind.WILDCARD || valueType.getKind() == TypeKind.TYPEVAR) {
-            return fail(usage, "CompletableFuture Dubbo result must be a concrete type: " + type);
+            return fail(usage, "CompletableFuture Dubbo result must be a concrete type: "
+                    + type + CONCRETE_GENERIC_EXAMPLE);
         }
         return valueType;
     }
@@ -623,6 +656,10 @@ final class GeneratedSourceWriter {
                 return new MapCodec(declared, usage);
             }
             TypeElement element = (TypeElement) declared.asElement();
+            if (declared.getTypeArguments().isEmpty() && !element.getTypeParameters().isEmpty()) {
+                return fail(usage, "Dubbo generic contract types must declare concrete type arguments: "
+                        + type + CONCRETE_GENERIC_EXAMPLE);
+            }
             if (element.getKind() == ElementKind.ENUM) {
                 return new EnumCodec(declared, element);
             }
@@ -755,8 +792,10 @@ final class GeneratedSourceWriter {
 
             CollectionCodec(DeclaredType type, Element usage) throws IOException {
                 this.type = type;
-                if (type.getTypeArguments().size() != 1) {
-                    fail(usage, "Dubbo collections must declare one concrete generic type: " + type);
+                if (type.getTypeArguments().size() != 1
+                        || !isConcreteGenericArgument(type.getTypeArguments().get(0))) {
+                    fail(usage, "Dubbo collections must declare one concrete generic type: "
+                            + type + CONCRETE_GENERIC_EXAMPLE);
                 }
                 item = type.getTypeArguments().get(0);
             }
@@ -805,8 +844,11 @@ final class GeneratedSourceWriter {
             line(source, "  private static " + type + ' ' + methodName("read", type)
                     + "(com.reactor.rust.dubbo.runtime.Hessian2Input in) {");
             line(source, "    if (in.readNull()) return null;");
+            line(source, "    if (in.isReference()) return (" + type + ") in.readReference();");
+            line(source, "    int reference = in.referenceCount();");
             line(source, "    int size = in.readListStart();");
             line(source, "    " + type + " value = new " + implementation + "<>(Math.max(size, 0));");
+            line(source, "    in.completeReference(reference, value);");
             line(source, "    int index = 0;");
             line(source, "    while (in.hasMoreListEntries(size, index)) {");
             line(source, "      value.add(" + readCall(item, "in") + ");");
@@ -824,8 +866,11 @@ final class GeneratedSourceWriter {
 
             MapCodec(DeclaredType type, Element usage) throws IOException {
                 this.type = type;
-                if (type.getTypeArguments().size() != 2) {
-                    fail(usage, "Dubbo maps must declare concrete key and value types: " + type);
+                if (type.getTypeArguments().size() != 2
+                        || !isConcreteGenericArgument(type.getTypeArguments().get(0))
+                        || !isConcreteGenericArgument(type.getTypeArguments().get(1))) {
+                    fail(usage, "Dubbo maps must declare concrete key and value types: "
+                            + type + CONCRETE_GENERIC_EXAMPLE);
                 }
                 keyType = type.getTypeArguments().get(0);
                 valueType = type.getTypeArguments().get(1);
@@ -846,8 +891,11 @@ final class GeneratedSourceWriter {
                 line(source, "  private static " + type + ' ' + methodName("read", type)
                         + "(com.reactor.rust.dubbo.runtime.Hessian2Input in) {");
                 line(source, "    if (in.readNull()) return null;");
+                line(source, "    if (in.isReference()) return (" + type + ") in.readReference();");
+                line(source, "    int reference = in.referenceCount();");
                 line(source, "    in.readMapStart();");
                 line(source, "    " + type + " value = new java.util.LinkedHashMap<>();");
+                line(source, "    in.completeReference(reference, value);");
                 line(source, "    while (in.hasMoreMapEntries()) value.put(" + readCall(keyType, "in")
                         + ", " + readCall(valueType, "in") + ");");
                 line(source, "    in.readMapEnd();");
@@ -892,9 +940,12 @@ final class GeneratedSourceWriter {
                     line(source, "    return in.readBinary();");
                 } else if (component.toString().equals("java.lang.Object")) {
                     line(source, "    if (in.readNull()) return null;");
+                    line(source, "    if (in.isReference()) return (" + type + ") in.readReference();");
+                    line(source, "    int reference = in.referenceCount();");
                     line(source, "    int size = in.readListStart();");
                     line(source, "    if (size >= 0) {");
                     line(source, "      Object[] value = new Object[size];");
+                    line(source, "      in.completeReference(reference, value);");
                     line(source, "      for (int index = 0; index < size; index++) "
                             + "value[index] = in.readDynamic();");
                     line(source, "      return value;");
@@ -906,13 +957,16 @@ final class GeneratedSourceWriter {
                     line(source, "      index++;");
                     line(source, "    }");
                     line(source, "    in.readListEnd(size);");
-                    line(source, "    return values.toArray();");
+                    line(source, "    return in.completeReference(reference, values.toArray());");
                 } else {
                     line(source, "    if (in.readNull()) return null;");
+                    line(source, "    if (in.isReference()) return (" + type + ") in.readReference();");
+                    line(source, "    int reference = in.referenceCount();");
                     line(source, "    int size = in.readListStart();");
                     line(source, "    if (size < 0) throw new com.reactor.rust.dubbo.runtime."
                             + "DubboCodecException(\"Variable-length typed arrays are not supported\");");
                     line(source, "    " + type + " value = new " + component + "[size];");
+                    line(source, "    in.completeReference(reference, value);");
                     line(source, "    for (int index = 0; index < size; index++) value[index] = "
                             + readCall(component, "in") + ';');
                     line(source, "    return value;");
@@ -946,14 +1000,17 @@ final class GeneratedSourceWriter {
                 line(source, "  private static " + type + ' ' + methodName("read", type)
                         + "(com.reactor.rust.dubbo.runtime.Hessian2Input in) {");
                 line(source, "    if (in.readNull()) return null;");
+                line(source, "    if (in.isReference()) return (" + type + ") in.readReference();");
+                line(source, "    int reference = in.referenceCount();");
                 line(source, "    in.expectObject(\"" + binaryName(element) + "\", " + fields + ");");
-                line(source, "    return switch (in.readString()) {");
+                line(source, "    " + type + " value = switch (in.readString()) {");
                 for (String constant : constants) {
                     line(source, "      case \"" + constant + "\" -> " + type + '.' + constant + ';');
                 }
                 line(source, "      default -> throw new com.reactor.rust.dubbo.runtime.DubboCodecException("
                         + "\"Unknown enum value for " + escape(type.toString()) + "\");");
                 line(source, "    };");
+                line(source, "    return in.completeReference(reference, value);");
                 line(source, "  }");
             }
         }
@@ -1002,8 +1059,14 @@ final class GeneratedSourceWriter {
                 line(source, "  private static " + type + ' ' + methodName("read", type)
                         + "(com.reactor.rust.dubbo.runtime.Hessian2Input in) {");
                 line(source, "    if (in.readNull()) return null;");
+                line(source, "    if (in.isReference()) return (" + type + ") in.readReference();");
+                line(source, "    int reference = in.referenceCount();");
                 line(source, "    String[] incomingFields = in.readObjectFields(\""
                         + binaryName(element) + "\");");
+                if (!record && !builder) {
+                    line(source, "    " + type + " value = new " + type + "();");
+                    line(source, "    in.completeReference(reference, value);");
+                }
                 for (int index = 0; index < properties.size(); index++) {
                     BeanProperty property = properties.get(index);
                     line(source, "    " + property.type() + " field" + index + " = "
@@ -1020,16 +1083,16 @@ final class GeneratedSourceWriter {
                 line(source, "      }");
                 line(source, "    }");
                 if (record) {
-                    line(source, "    return new " + type + '(' + fieldNames(properties.size()) + ");");
+                    line(source, "    return in.completeReference(reference, new " + type
+                            + '(' + fieldNames(properties.size()) + "));");
                 } else if (builder) {
                     StringBuilder expression = new StringBuilder(type.toString()).append(".builder()");
                     for (int index = 0; index < properties.size(); index++) {
                         expression.append('.').append(properties.get(index).name())
                                 .append("(field").append(index).append(')');
                     }
-                    line(source, "    return " + expression + ".build();");
+                    line(source, "    return in.completeReference(reference, " + expression + ".build());");
                 } else {
-                    line(source, "    " + type + " value = new " + type + "();");
                     for (int index = 0; index < properties.size(); index++) {
                         line(source, "    " + properties.get(index).write("value", "field" + index));
                     }

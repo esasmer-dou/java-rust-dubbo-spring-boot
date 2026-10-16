@@ -87,9 +87,28 @@ public final class NativeDubboBridge {
                                               String group, String version, String method,
                                               String descriptor, String executor,
                                               int maxConcurrent) {
+        registerProviderMethod(serviceId, methodId, service, group, version, method, descriptor,
+                executor, maxConcurrent, 0);
+    }
+
+    public static void registerProviderMethod(int serviceId, int methodId, String service,
+                                              String group, String version, String method,
+                                              String descriptor, String executor,
+                                              int maxConcurrent, int timeoutMs) {
+        if (timeoutMs < 0) throw new IllegalArgumentException("timeoutMs must not be negative");
         ensureLoaded();
-        nativeRegisterProviderMethod(serviceId, methodId, service, group, version, method,
-                descriptor, executor == null ? "" : executor, maxConcurrent);
+        if (timeoutMs == 0) {
+            nativeRegisterProviderMethod(serviceId, methodId, service, group, version, method,
+                    descriptor, executor == null ? "" : executor, maxConcurrent);
+        } else {
+            try {
+                nativeRegisterProviderMethodWithTimeout(serviceId, methodId, service, group, version, method,
+                        descriptor, executor == null ? "" : executor, maxConcurrent, timeoutMs);
+            } catch (UnsatisfiedLinkError missingCapability) {
+                throw new DubboNativeException("Method deadlines require an updated rust_dubbo DLL/SO; "
+                        + "the loaded ABI 3 binary does not provide this additive capability", missingCapability);
+            }
+        }
     }
 
     public static ByteBuffer growProviderResponse(long responseHandle, int requiredBytes) {
@@ -185,6 +204,9 @@ public final class NativeDubboBridge {
                                                             int maxConcurrent);
     private static native ByteBuffer nativeGrowProviderResponse(long responseHandle,
                                                                 int requiredBytes);
+    private static native void nativeRegisterProviderMethodWithTimeout(int serviceId, int methodId,
+            String service, String group, String version, String method, String descriptor,
+            String executor, int maxConcurrent, int timeoutMs);
     private static native boolean nativeCompleteProviderResponse(long responseHandle,
                                                                  int responseLength);
     private static native boolean nativeFailProviderResponse(long responseHandle, String message);

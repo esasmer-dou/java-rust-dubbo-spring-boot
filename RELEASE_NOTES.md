@@ -1,61 +1,49 @@
-# Java Rust Dubbo Spring Boot 0.6.0
+# Java Rust Dubbo Spring Boot 0.7.0
 
 ## What's New
 
-Version `0.6.0` completes the large read-only response path on the consumer side without changing the declared `List<T>` service signature.
-
-- `@DubboStreamed` opts one synchronous concrete `List<T>` method into incremental consumer decoding.
-- Generated clients return a native-backed `DubboStreamingResult<T>` behind the existing `List<T>` declaration.
-- A one-pass HTTP or export writer decodes and writes one DTO at a time instead of retaining the entire consumer object graph.
-- Normal `List` operations remain compatible and materialize on demand.
-- Native response ownership is released on completion, explicit close, decode failure, and client disconnect.
-- The data flow remains one database cursor, one Dubbo request, and one Dubbo response. No chatty page loop is introduced.
-
-Use this feature only for deliberately large, unpaged, read-only results. Keep pagination as the normal API design. The encoded response remains a bounded native payload until the writer completes, so payload and in-flight limits still matter.
+This release fixes Hessian2 interoperability and adds explicit provider method deadlines.
+Business services remain in Java. The generated invocation and codec paths remain reflection-free.
 
 ```java
-public interface CatalogRepository {
-    @DubboStreamed
-    List<CatalogRow> findAll(CatalogFilter filter);
+@DubboService(timeout = 1500)
+public final class CatalogServiceImpl implements CatalogService {
+    @Override
+    @DubboMethod(timeoutMs = 300)
+    public CatalogView find(long id) { return repository.find(id); }
 }
 ```
 
-Upgrade all framework artifacts together:
+`find` uses 300 ms; other methods inherit 1500 ms. Queue wait and asynchronous completion
+consume the same deadline. Expired queued work is not started. A running database operation is
+not canceled or rolled back by a network timeout. Keep JDBC deadlines and idempotency explicit.
+Native buffers and admission permits remain owned until the actual Java completion.
 
-```xml
-<properties>
-  <java-rust-dubbo.version>0.6.0</java-rust-dubbo.version>
-</properties>
-```
+Hessian2 integer-thousandth doubles now decode correctly. Fractional output uses standard
+full-width doubles for mixed-peer compatibility. Typed/generated and dynamic reference tables
+stay aligned across records, collections and temporal values. Unsupported immutable cycles
+fail explicitly rather than using reflective construction.
 
-Native ABI remains `3`. Windows x64, GLIBC 2.17-compatible Linux x64, and Apple Silicon macOS 11+ artifacts keep the existing native protocol surface.
+The optional Glowroot 0.6.0 native-Dubbo adapter can record provider business completion as
+`Dubbo Provider` transactions. The Dubbo runtime itself does not depend on Glowroot.
+
+Upgrade all framework artifacts and the annotation processor to `0.7.0`; rebuild the application.
+Use the matching Windows x64 DLL, Linux x64 GLIBC 2.17 SO, or macOS ARM64 dylib.
+Native ABI remains `3`; the deadline entry point is additive. Previous streaming APIs remain supported.
 
 ## Yenilikler
 
-`0.6.0`, büyük ve salt okunur sonuçların consumer tarafını tamamlar. Servis metodunun tanımlı `List<T>` imzası değişmez.
+Bu sürüm Hessian2 uyumluluğunu düzeltir. Provider metotlarına ayrı timeout tanımlamayı sağlar.
+İş kodu Java'da kalır. Metot çağrısı ve codec kodu build sırasında üretilir. Reflection eklenmez.
 
-- `@DubboStreamed`, senkron ve somut bir `List<T>` metodunda artımlı consumer decode yolunu açar.
-- Generated client, mevcut `List<T>` tanımının arkasında native response'a bağlı `DubboStreamingResult<T>` döndürür.
-- Tek geçişli HTTP veya export writer, bütün consumer nesne grafiğini tutmak yerine her seferinde bir DTO decode edip yazar.
-- Normal `List` işlemleri uyumluluk için çalışır ve gerektiğinde sonucu materialize eder.
-- Native response sahipliği tamamlanma, açık `close`, decode hatası ve client bağlantısının kopması yollarında serbest bırakılır.
-- Veri akışı tek database cursor, tek Dubbo isteği ve tek Dubbo cevabı olarak kalır. Tekrarlayan sayfa çağrıları eklenmez.
+Örnekte `find` için 300 ms, diğer metotlar için 1500 ms kullanılır. Kuyrukta bekleme ve async
+tamamlanma bu süreye dahildir. Kuyrukta süresi dolan iş başlatılmaz. Başlamış DB işlemi ağ timeout'u
+yüzünden durdurulmaz veya geri alınmaz. JDBC timeout'unu ve idempotency kuralını ayrıca belirleyin.
+Java tamamlanana kadar native buffer ve concurrency izni korunur.
 
-Bu özelliği yalnız bilinçli olarak büyük, sayfalamasız ve salt okunur sonuçlarda kullanın. Normal API tasarımında sayfalama kullanın. Encoded cevap writer tamamlanana kadar sınırlandırılmış native payload olarak kalır. Bu nedenle payload ve in-flight limitleri önemini korur.
+Kesirli double değerleri ve tarih/saat içeren sonuçlardaki nesne referansları düzeltildi.
+İsteğe bağlı Glowroot 0.6.0 adaptörü provider işlemlerini `Dubbo Provider` türünde gösterir.
+Dubbo runtime'a agent bağımlılığı eklenmez.
 
-```java
-public interface CatalogRepository {
-    @DubboStreamed
-    List<CatalogRow> findAll(CatalogFilter filter);
-}
-```
-
-Tüm framework artifact'larını birlikte yükseltin:
-
-```xml
-<properties>
-  <java-rust-dubbo.version>0.6.0</java-rust-dubbo.version>
-</properties>
-```
-
-Native ABI `3` olarak kalır. Windows x64, GLIBC 2.17 uyumlu Linux x64 ve Apple Silicon macOS 11+ artifact'larının native protokol yüzeyi değişmez.
+Tüm framework paketlerini ve annotation processor sürümünü `0.7.0` yapın. Uygulamayı yeniden
+derleyin. Aynı sürümün DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
