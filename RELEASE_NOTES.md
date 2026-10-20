@@ -30,8 +30,8 @@ opening the iterator; one-pass mode rejects them explicitly. No second parse or 
 allocation is added. A 10,000-row regression test checks the decoder retains at most the root
 list and current row instead of 10,001 object references.
 
-The provider telemetry SPI is available in 0.7.0. The matching Glowroot 0.6.0 native-Dubbo
-adapter is published. Enable it only when provider telemetry is needed. Dubbo 0.7.0
+The provider telemetry SPI is available in 0.7.0. The matching Glowroot 0.7.0 native-Dubbo
+adapter is published. Keep all agent modules on 0.7.0. Enable it only when provider telemetry is needed. Dubbo 0.7.0
 works independently and does not require the agent. See the agent release notes for
 the measured memory budget and its limits; this is not an always-below-3-MiB guarantee.
 
@@ -53,8 +53,9 @@ Kesirli double değerleri ve tarih/saat içeren sonuçlardaki nesne referanslar�
 Tek geçişli tüketim biten öğeleri bellekte tutmaz. Öğeler arası referans içeren sonucu normal
 List olarak okuyun. Böyle bir referans tek geçişli modda açık hata verir. İkinci parse geçişi
 veya öğe başına weak-reference allocation eklenmez.
-Provider telemetri arayüzü 0.7.0 ile kullanılabilir. Uygun Glowroot 0.6.0 adaptörü yayımlandı.
-Yalnız provider telemetrisi gerektiğinde açın. Dubbo 0.7.0 agent olmadan da çalışır.
+Provider telemetri arayüzü 0.7.0 ile kullanılabilir. Uygun Glowroot 0.7.0 adaptörü yayımlandı.
+Tüm agent modüllerini 0.7.0 sürümünde tutun. Yalnız provider telemetrisi gerektiğinde açın.
+Dubbo 0.7.0 agent olmadan da çalışır.
 Ölçülen bellek bütçesi ve sınırları agent sürüm notlarındadır. Her koşulda 3 MiB altında
 kalacağı garanti edilmez. Runtime'a zorunlu agent bağımlılığı eklenmez.
 

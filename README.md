@@ -85,8 +85,9 @@ admission permit remain owned until the Java operation actually completes. Write
 Set a compatible timeout on the consumer as well.
 
 Use the matching `0.7.0` DLL/SO/dylib for method deadlines. Native ABI stays `3`; new entry points
-are additive. The optional [Glowroot `0.6.0` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0)
-is published. Add `java-rust-glowroot-spring-native-dubbo-adapter:0.6.0` to observe providers.
+are additive. For optional provider telemetry, use the published
+[Glowroot `0.7.0` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.0):
+`java-rust-glowroot-spring-native-dubbo-adapter:0.7.0`. Keep all agent modules on that version.
 Dubbo `0.7.0` also works independently without that agent; no agent runtime is added transitively.
 
 Streaming iterators are one-pass. A second consumption attempt fails with a clear message.

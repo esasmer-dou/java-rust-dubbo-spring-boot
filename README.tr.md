@@ -84,8 +84,9 @@ JDBC timeout'unu ve idempotency kuralını ayrıca belirleyin. Java tamamlanana 
 ve concurrency izni korunur. Yazma işlemi kendiliğinden tekrarlanmaz. Consumer timeout'unu da ayarlayın.
 
 Metot timeout'u için aynı sürümün `0.7.0` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
-Yeni girişler mevcut API'ye eklenir. İsteğe bağlı [Glowroot `0.6.0` adaptörü](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0)
-yayımlandı. Provider ölçümü için `java-rust-glowroot-spring-native-dubbo-adapter:0.6.0` ekleyin.
+Yeni girişler mevcut API'ye eklenir. İsteğe bağlı provider ölçümü için yayımlanmış
+[Glowroot `0.7.0` adaptörünü](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.0) kullanın:
+`java-rust-glowroot-spring-native-dubbo-adapter:0.7.0`. Tüm agent modüllerini aynı sürümde tutun.
 Dubbo `0.7.0`, agent olmadan da bağımsız çalışır. Runtime'a agent bağımlılığı kendiliğinden eklenmez.
 
 Streaming iterator yalnız bir kez tüketilir. İkinci denemede açık hata mesajı verilir.
