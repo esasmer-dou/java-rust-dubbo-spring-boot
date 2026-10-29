@@ -1,9 +1,44 @@
 # Changelog
 
+## 0.8.0 - 2026-10-29
+
+- Connect direct Hessian-to-JSON lists to an optional Rust-Java REST owned-body
+  adapter. Support concrete nested lists without consumer row DTO construction;
+  preserve correct finite numeric formatting, UTF-8 escaping and explicit schema failures.
+- Keep the native wire across one exact-size HTTP buffer retry. Do not replay
+  the RPC. Close on success, malformed input, cancellation and abandoned retries.
+- Add startup-only plain-Java generated client assembly without Spring or proxies.
+- Replace provider output and pending-completion maps with fixed generational
+  atomic slots. Timeout does not revoke a live Java borrow; wire/response credit
+  follows the actual callback and outbound body. Native ABI remains 3.
+- Bound retained native consumer responses to 256 generational handles and 32 MiB,
+  without payload copies or a per-response registry mutex. Failed JNI exposure
+  releases ownership. Reject capacity without RPC replay; expose limits and
+  rejection metrics. The new direct path checks response policy 1 before dispatch.
+- Move the sole asynchronous callback reference onto the bounded attached callback
+  lane. Its admission permit covers RPC, queued and executing work; I/O workers do
+  not invoke Java or attach for normal callback cleanup. Normal overload fails
+  before dispatch; an impossible internal queue invariant is terminal, not a retry.
+- Write native provider headers and body through a bounded vectored-write cursor;
+  preserve partial writes, one deadline, body ownership and connection serialization.
+- Resolve the exact provider JNI dispatcher method at startup and retain its
+  owning global object. Dispatch with six stack arguments instead of reparsing
+  the signature, resolving the method and allocating an argument Vec per RPC.
+  Java business signatures and native ABI stay unchanged.
+- Reuse one connection-local primitive invocation header plan (at most 1 KiB of
+  metadata) instead of rebuilding fixed service/method/attachment graphs per RPC.
+  Learn only from scalar wire arguments, not just a primitive method signature;
+  never replace the learned plan on metadata churn. Validate every argument and
+  exact metadata match; use the full bounded parser
+  for object graphs or changed metadata. Share the immutable execution-lane name
+  instead of cloning its String on each dispatch. Do not cache business responses.
+- Ship coordinated Linux x64, Windows x64 and macOS ARM64 native artifacts.
+  Use the native JAR matching this release; native ABI remains 3.
+
 ## 0.7.0 - 2026-10-16
 
-- Keep one-pass decoding bounded to the current item's reference window. Cross-item references require normal List materialization; no complete DTO graph is silently retained.
-- Reject truncated variable-length lists instead of returning a successful partial result.
+- Keep one-pass consumer reference retention bounded to the root and current item. Cross-item references require normal List materialization; they fail explicitly in one-pass mode instead of retaining the full DTO graph.
+- Reject truncated variable-length streaming lists instead of reporting a successful partial result.
 
 - Correct standard Hessian2 integer-thousandth double decoding and use full-width fractional double output for mixed-peer compatibility.
 - Keep typed/generated object, list, map, enum, array, and temporal reference slots aligned with dynamic `Q` references; preserve mutable cyclic objects such as Throwable causes.
@@ -94,6 +129,6 @@
 - Added GitHub Packages publication, source JARs, Java/Rust SBOMs, checksums, and an empty-cache consumer gate.
 - Added CI, pinned GitHub Actions, Dependabot, stable release notes, and durable release evidence.
 - Added an automated 10,000-call Spring Boot container RPC gate. Benchmark images now consume a version-independent `target/app.jar` to prevent stale snapshot artifacts.
-- Keep internal compatibility profiles opt-in. Private application artifacts are not part of the framework package or the standalone release workflow.
+- Kept the NMC compatibility profile opt-in because it requires private `com.zenia` artifacts. Those artifacts are not part of the framework package or its standalone release workflow.
 
 This is the first stable release.

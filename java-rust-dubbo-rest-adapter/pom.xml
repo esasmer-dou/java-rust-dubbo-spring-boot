@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.reactor</groupId>
+    <artifactId>java-rust-dubbo-spring-boot-parent</artifactId>
+    <version>0.8.0</version>
+  </parent>
+  <artifactId>java-rust-dubbo-rest-adapter</artifactId>
+  <name>Java Rust Dubbo Optional REST Adapter</name>
+  <dependencies>
+    <dependency>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-dubbo-runtime</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.reactor</groupId>
+      <artifactId>rust-java-rest</artifactId>
+      <version>4.8.0</version>
+      <scope>provided</scope>
+      <exclusions>
+        <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+      </exclusions>
+    </dependency>
+  </dependencies>
+</project>

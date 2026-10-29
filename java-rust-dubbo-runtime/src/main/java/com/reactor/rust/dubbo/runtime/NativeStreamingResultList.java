@@ -1,10 +1,13 @@
 package com.reactor.rust.dubbo.runtime;
 
+import java.lang.ref.Cleaner;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.LongAdder;
 
 final class NativeStreamingResultList<E> extends AbstractList<E>
         implements DubboStreamingResult<E> {
@@ -14,7 +17,8 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
     private final Hessian2Input input;
     private final NativeResponseDecoder<E> decoder;
     private final int declaredSize;
-    private final Runnable releaseAction;
+    private final LeakGuard leakGuard;
+    private final Cleaner.Cleanable cleanable;
     private ArrayList<E> materialized;
     private int decodedItems;
     private boolean released;
@@ -25,7 +29,7 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
             Hessian2Input input,
             int declaredSize,
             NativeResponseDecoder<E> decoder) {
-        this(input, declaredSize, decoder, new NativeResponseLease(response, input));
+        this(input, declaredSize, decoder, new NativeResponseLease(response));
     }
 
     NativeStreamingResultList(
@@ -36,8 +40,19 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
         this.input = Objects.requireNonNull(input, "input");
         this.decoder = Objects.requireNonNull(decoder, "decoder");
         this.declaredSize = declaredSize;
-        this.releaseAction = Objects.requireNonNull(releaseAction, "releaseAction");
-        input.completeReference(input.referenceCount() - 1, this);
+        // The production action owns only the native response, never this list or its decoder.
+        this.leakGuard = new LeakGuard(Objects.requireNonNull(releaseAction, "releaseAction"));
+        this.cleanable = Cleanup.CLEANER.register(this, leakGuard);
+        try {
+            input.completeReference(input.referenceCount() - 1, this);
+        } catch (RuntimeException | Error failure) {
+            try {
+                release();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
     }
 
     @Override
@@ -135,8 +150,8 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
     private boolean hasMore() {
         try {
             return input.hasMoreListEntries(declaredSize, decodedItems);
-        } catch (RuntimeException failure) {
-            fail();
+        } catch (RuntimeException | Error failure) {
+            fail(failure);
             throw failure;
         }
     }
@@ -147,8 +162,8 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
             E value = decoder.decode(input);
             decodedItems = Math.incrementExact(decodedItems);
             return value;
-        } catch (RuntimeException failure) {
-            fail();
+        } catch (RuntimeException | Error failure) {
+            fail(failure);
             throw failure;
         }
     }
@@ -157,23 +172,80 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
         try {
             input.readListEnd(declaredSize);
             mode = finishedMode;
-        } catch (RuntimeException failure) {
-            fail();
+        } catch (RuntimeException | Error failure) {
+            fail(failure);
             throw failure;
         } finally {
             release();
         }
     }
 
-    private void fail() {
+    private void fail(Throwable failure) {
         mode = Mode.CLOSED;
-        release();
+        try {
+            release();
+        } catch (RuntimeException | Error cleanupFailure) {
+            if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+        }
     }
 
     private void release() {
         if (!released) {
             released = true;
-            releaseAction.run();
+            try {
+                input.detach();
+            } finally {
+                try {
+                    leakGuard.release(false);
+                } finally {
+                    cleanable.clean();
+                }
+            }
+        }
+    }
+
+    static long leakedResultCount() {
+        return LeakCounters.LEAKED_RESULTS.sum();
+    }
+
+    static void resetLeakedResultCountForTesting() {
+        LeakCounters.LEAKED_RESULTS.reset();
+    }
+
+    private static final class Cleanup {
+        // Initialized only on the first actual streaming result, never on disabled/non-streamed paths.
+        private static final Cleaner CLEANER = Cleaner.create(task -> {
+            Thread thread = new Thread(null, task, "reactor-dubbo-stream-cleaner", 256 * 1024L, false);
+            thread.setDaemon(true);
+            thread.setContextClassLoader(null);
+            return thread;
+        });
+    }
+
+    private static final class LeakCounters {
+        private static final LongAdder LEAKED_RESULTS = new LongAdder();
+    }
+
+    private static final class LeakGuard implements Runnable {
+        private final AtomicBoolean released = new AtomicBoolean();
+        private Runnable action;
+
+        private LeakGuard(Runnable action) {
+            this.action = action;
+        }
+
+        private void release(boolean leaked) {
+            if (released.compareAndSet(false, true)) {
+                Runnable current = action;
+                action = null;
+                if (leaked) LeakCounters.LEAKED_RESULTS.increment();
+                current.run();
+            }
+        }
+
+        @Override
+        public void run() {
+            release(true);
         }
     }
 
@@ -207,21 +279,17 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
 
     private static final class NativeResponseLease implements Runnable {
         private NativeResponse response;
-        private Hessian2Input input;
 
-        private NativeResponseLease(NativeResponse response, Hessian2Input input) {
+        private NativeResponseLease(NativeResponse response) {
             this.response = Objects.requireNonNull(response, "response");
-            this.input = Objects.requireNonNull(input, "input");
         }
 
         @Override
-        public synchronized void run() {
+        public void run() {
             if (response == null) {
                 return;
             }
-            input.detach();
             response.close();
-            input = null;
             response = null;
         }
     }

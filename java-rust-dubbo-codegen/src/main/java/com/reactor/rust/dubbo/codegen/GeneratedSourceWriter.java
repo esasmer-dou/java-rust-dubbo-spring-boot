@@ -9,6 +9,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
+import java.nio.charset.StandardCharsets;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -41,6 +43,7 @@ final class GeneratedSourceWriter {
     private final List<RustDubboProcessor.ReferenceContract> references;
     private final List<RustDubboProcessor.ServiceContract> services;
     private final CodecRegistry codecs;
+    private final boolean plainJava;
 
     GeneratedSourceWriter(ProcessingEnvironment processing,
                           Collection<RustDubboProcessor.ReferenceContract> references,
@@ -48,6 +51,11 @@ final class GeneratedSourceWriter {
         this.processing = processing;
         elements = processing.getElementUtils();
         types = processing.getTypeUtils();
+        String framework = processing.getOptions().getOrDefault(RustDubboProcessor.FRAMEWORK_OPTION, "spring");
+        if (!framework.equals("spring") && !framework.equals("plain")) {
+            throw new IllegalArgumentException("reactor.dubbo.framework must be spring or plain");
+        }
+        plainJava = framework.equals("plain");
         this.references = references.stream()
                 .sorted(Comparator.comparing(RustDubboProcessor.ReferenceContract::contract)
                         .thenComparing(RustDubboProcessor.ReferenceContract::group)
@@ -69,8 +77,9 @@ final class GeneratedSourceWriter {
         try (Writer writer = source.openWriter()) {
             writer.write(source(simpleName));
         }
-        var imports = processing.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "",
-                "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports");
+        var imports = processing.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", plainJava
+                ? "META-INF/services/com.reactor.rust.dubbo.runtime.GeneratedDubboModule"
+                : "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports");
         try (Writer writer = imports.openWriter()) {
             writer.write(qualifiedName);
             writer.write('\n');
@@ -105,17 +114,23 @@ final class GeneratedSourceWriter {
                 codecs.register(signature.getReturnType(), method.element());
             }
         }
+        if (method.directJson()) {
+            DeclaredType list = (DeclaredType) signature.getReturnType();
+            codecs.registerDirect(list.getTypeArguments().get(0), method.element(), new HashSet<>(), 0);
+        }
     }
 
     private String source(String simpleName) throws IOException {
         StringBuilder source = new StringBuilder(32_768);
         line(source, "package " + GENERATED_PACKAGE + ";");
         line(source, "");
-        line(source, "@org.springframework.boot.autoconfigure.AutoConfiguration(before = "
-                + "com.reactor.rust.dubbo.spring.RustDubboAutoConfiguration.class)");
+        if (!plainJava) {
+            line(source, "@org.springframework.boot.autoconfigure.AutoConfiguration(before = "
+                    + "com.reactor.rust.dubbo.spring.RustDubboAutoConfiguration.class)");
+        }
         line(source, "public final class " + simpleName
                 + " implements com.reactor.rust.dubbo.runtime.GeneratedDubboModule {");
-        emitProviderBeans(source);
+        if (!plainJava) emitProviderBeans(source);
         emitRegisterClients(source);
         emitRegisterProviders(source);
         emitClients(source);
@@ -229,7 +244,7 @@ final class GeneratedSourceWriter {
         for (RustDubboProcessor.ReferenceContract reference : unique.values()) {
             line(source, "  private static final class " + clientClass(reference)
                     + " extends com.reactor.rust.dubbo.runtime.GeneratedDubboClientSupport"
-                    + " implements " + reference.contract() + " {");
+                    + " implements " + reference.contractElement().getQualifiedName() + " {");
             line(source, "    private " + clientClass(reference)
                     + "(int clientId, com.reactor.rust.dubbo.runtime.DubboClientOptions options) {");
             line(source, "      super(clientId, options.timeoutMs(), options.maxCollectionItems(),"
@@ -259,8 +274,14 @@ final class GeneratedSourceWriter {
         if (method.streamed()) {
             DeclaredType listType = (DeclaredType) signature.getReturnType();
             TypeMirror itemType = listType.getTypeArguments().get(0);
-            line(source, "        return invokeStreamedList(" + method.id()
-                    + ", call, in -> " + codecs.readCall(itemType, "in") + ");");
+            if (method.directJson()) {
+                line(source, "        return invokeDirectJsonList(" + method.id()
+                        + ", call, in -> " + codecs.readCall(itemType, "in")
+                        + ", (in, json) -> " + codecs.jsonCall(itemType, "in", "json") + ");");
+            } else {
+                line(source, "        return invokeStreamedList(" + method.id()
+                        + ", call, in -> " + codecs.readCall(itemType, "in") + ");");
+            }
             line(source, "      }");
             line(source, "    }");
             return;
@@ -537,6 +558,7 @@ final class GeneratedSourceWriter {
             value.append('R').append(clientKey(reference)).append(reference.check());
             for (RustDubboProcessor.MethodContract method : reference.methods()) {
                 value.append(method.id()).append(method.streamed());
+                if (method.directJson()) value.append("directJson");
             }
         }
         for (RustDubboProcessor.ServiceContract service : services) {
@@ -603,6 +625,79 @@ final class GeneratedSourceWriter {
 
     private final class CodecRegistry {
         private final Map<String, CodecType> registered = new LinkedHashMap<>();
+        private final Map<String, TypeMirror> directTypes = new LinkedHashMap<>();
+        private final Map<String, Integer> directHeights = new LinkedHashMap<>();
+        private final Map<String, Integer> directWireValues = new LinkedHashMap<>();
+
+        void registerDirect(TypeMirror type, Element usage, Set<String> active, int depth) throws IOException {
+            String key = key(type);
+            if (depth >= 32 || active.contains(key)) fail(usage, "directJson rejects recursive or more-than-32-level DTO schemas: " + type);
+            if (directTypes.containsKey(key)) {
+                if (depth + directHeights.get(key) > 32) fail(usage, "directJson DTO schema exceeds 32 levels: " + type);
+                return;
+            }
+            CodecType codec = registered.get(key);
+            if (codec instanceof ListCodec && !types.erasure(type).toString().equals("java.util.List")) {
+                fail(usage, "directJson collections must use java.util.List with a concrete supported element type: " + type);
+            }
+            if (codec instanceof PrimitiveCodec && type.getKind() == TypeKind.CHAR
+                    || codec instanceof SimpleDeclaredCodec simple && !Set.of("java.lang.Boolean", "java.lang.Byte",
+                    "java.lang.Short", "java.lang.Integer", "java.lang.Long", "java.lang.Float", "java.lang.Double",
+                    "java.lang.String", "java.math.BigDecimal", "java.time.LocalDate").contains(simple.erased)
+                    || !(codec instanceof PrimitiveCodec || codec instanceof SimpleDeclaredCodec
+                    || codec instanceof EnumCodec || codec instanceof BeanCodec || codec instanceof ListCodec)) {
+                fail(usage, "directJson supports boolean/numeric scalars, String, enum, BigDecimal, LocalDate, typed Lists and acyclic DTOs only; unsupported " + type);
+            }
+            if (directTypes.size() + active.size() >= 64) fail(usage, "directJson schema exceeds 64 distinct types");
+            if (codec instanceof BeanCodec bean) {
+                if (!bean.record) fail(usage, "directJson currently requires record DTOs; mutable/builder bean JSON semantics are not verified: " + type);
+                if (binaryName(bean.element).length() > 256) fail(usage, "directJson type name exceeds 256 characters");
+                if (bean.properties.size() > 64) fail(usage, "directJson DTO exceeds 64 fields: " + type);
+                for (Element member : elements.getAllMembers(bean.element)) {
+                    if (member.getAnnotationMirrors().stream().anyMatch(annotation -> annotation.getAnnotationType()
+                            .toString().startsWith("com.fasterxml.jackson."))) {
+                        fail(usage, "directJson rejects Jackson-customized DTO members; use the normal DTO path: " + type);
+                    }
+                }
+                if (bean.element.getAnnotationMirrors().stream().anyMatch(annotation -> annotation.getAnnotationType()
+                        .toString().startsWith("com.fasterxml.jackson."))) fail(usage, "directJson rejects Jackson-customized DTOs: " + type);
+                for (BeanProperty property : bean.properties) {
+                    if (property.name().length() > 256) fail(usage, "directJson field name exceeds 256 characters");
+                }
+            }
+            if (codec instanceof EnumCodec enumeration && enumeration.constants.size() > 256) {
+                fail(usage, "directJson enum exceeds 256 constants: " + type);
+            }
+            if (codec instanceof EnumCodec enumeration) {
+                if (enumeration.constants.stream().anyMatch(name -> name.length() > 256)) fail(usage, "directJson enum name exceeds 256 characters");
+                if (binaryName(enumeration.element).length() > 256) fail(usage, "directJson type name exceeds 256 characters");
+                if (enumeration.element.getAnnotationMirrors().stream().anyMatch(annotation -> annotation.getAnnotationType()
+                        .toString().startsWith("com.fasterxml.jackson."))
+                        || elements.getAllMembers(enumeration.element).stream().anyMatch(member -> member.getAnnotationMirrors()
+                        .stream().anyMatch(annotation -> annotation.getAnnotationType().toString().startsWith("com.fasterxml.jackson.")))) {
+                    fail(usage, "directJson rejects Jackson-customized enums: " + type);
+                }
+            }
+            active.add(key);
+            for (TypeMirror dependency : codec.dependencies()) registerDirect(dependency, usage, active, depth + 1);
+            active.remove(key);
+            directTypes.put(key, type);
+            int height = 1;
+            int values = codec instanceof BeanCodec || codec instanceof EnumCodec || codec instanceof ListCodec
+                    || codec instanceof SimpleDeclaredCodec simple
+                    && Set.of("java.math.BigDecimal", "java.time.LocalDate").contains(simple.erased) ? 1 : 0;
+            for (TypeMirror dependency : codec.dependencies()) {
+                height = Math.max(height, 1 + directHeights.get(key(dependency)));
+                values += directWireValues.get(key(dependency));
+                if (values > 1024) fail(usage, "directJson expanded DTO schema exceeds 1024 reference-bearing values per row: " + type);
+            }
+            directHeights.put(key, height);
+            directWireValues.put(key, values);
+        }
+
+        String jsonCall(TypeMirror type, String input, String output) {
+            return methodName("transcodeToJson", type) + '(' + input + ", " + output + ')';
+        }
 
         void register(TypeMirror type, Element usage) throws IOException {
             String key = key(type);
@@ -628,6 +723,125 @@ final class GeneratedSourceWriter {
             for (CodecType codec : registered.values()) {
                 codec.emit(source);
             }
+            for (TypeMirror type : directTypes.values()) emitDirect(source, type, registered.get(key(type)));
+        }
+
+        private void emitDirect(StringBuilder source, TypeMirror type, CodecType codec) {
+            String suffix = Integer.toUnsignedString(StableIds.fnv1a32(key(type)), 16);
+            String method = methodName("transcodeToJson", type);
+            if (codec instanceof BeanCodec bean) {
+                for (int index = 0; index < bean.properties.size(); index++) {
+                    line(source, "  private static final byte[] JSON_FIELD_" + suffix + '_' + index + " = "
+                            + jsonBytes(bean.properties.get(index).name(), true) + ';');
+                }
+            }
+            if (codec instanceof EnumCodec enumeration) {
+                line(source, "  private static final String[] JSON_ENUM_" + suffix + " = {"
+                        + enumeration.constants.stream().map(name -> "\"" + escape(name) + "\"")
+                        .collect(java.util.stream.Collectors.joining(",")) + "};");
+                line(source, "  private static final byte[][] JSON_ENUM_BYTES_" + suffix + " = {"
+                        + enumeration.constants.stream().map(name -> jsonBytes(name, false))
+                        .collect(java.util.stream.Collectors.joining(",")) + "};");
+            }
+            line(source, "  public static void " + method
+                    + "(com.reactor.rust.dubbo.runtime.Hessian2Input in, com.reactor.rust.dubbo.runtime.Hessian2JsonTranscoder json) throws java.io.IOException {");
+            if (!(codec instanceof PrimitiveCodec)) line(source, "    if (json.writeNull(in)) return;");
+            if (codec instanceof BeanCodec bean) {
+                line(source, "    if (json.replayReference(in, (value, out) -> " + method + "(value, out))) return;");
+                line(source, "    int reference = json.beginObject(in, \"" + escape(binaryName(bean.element)) + "\");");
+                line(source, "    String[] incoming = json.objectFields(in);");
+                line(source, "    long seen = 0L;");
+                line(source, "    json.writeByte('{');");
+                line(source, "    for (String field : incoming) {");
+                line(source, "      switch (field) {");
+                for (int index = 0; index < bean.properties.size(); index++) {
+                    BeanProperty property = bean.properties.get(index);
+                    long mask = 1L << index;
+                    line(source, "        case \"" + escape(property.name()) + "\" -> {");
+                    line(source, "          json.field(JSON_FIELD_" + suffix + '_' + index + ", seen == 0L);");
+                    line(source, "          seen |= " + mask + "L;");
+                    line(source, "          " + jsonCall(property.type(), "in", "json") + ';');
+                    line(source, "        }");
+                }
+                line(source, "        default -> json.skipValue(in);");
+                line(source, "      }");
+                line(source, "    }");
+                for (int index = 0; index < bean.properties.size(); index++) {
+                    BeanProperty property = bean.properties.get(index);
+                    long mask = 1L << index;
+                    line(source, "    if ((seen & " + mask + "L) == 0L) {");
+                    line(source, "      json.field(JSON_FIELD_" + suffix + '_' + index + ", seen == 0L);");
+                    line(source, "      seen |= " + mask + "L;");
+                    line(source, "      " + (property.type().getKind() == TypeKind.BOOLEAN ? "json.writeBoolean(false)"
+                            : property.type().getKind() == TypeKind.FLOAT ? "json.writeFloatAscii(0.0f)"
+                            : property.type().getKind() == TypeKind.DOUBLE ? "json.writeDoubleAscii(0.0d)"
+                            : property.type().getKind().isPrimitive() ? "json.writeLongAscii(0L)" : "json.writeNull()") + ';');
+                    line(source, "    }");
+                }
+                line(source, "    json.writeByte('}');");
+                line(source, "    json.endObject(in, reference);");
+            } else if (codec instanceof ListCodec list) {
+                line(source, "    if (json.replayReference(in, (value, out) -> " + method + "(value, out))) return;");
+                line(source, "    String[] enclosingFields = json.objectFields(in);");
+                line(source, "    try {");
+                line(source, "      int size = json.beginList(in);");
+                line(source, "      int count = 0;");
+                line(source, "      json.writeByte('[');");
+                line(source, "      while (json.hasMoreListEntries(in, size, count)) {");
+                line(source, "        if (count != 0) json.writeByte(',');");
+                line(source, "        " + jsonCall(list.item, "in", "json") + ';');
+                line(source, "        count++;");
+                line(source, "      }");
+                line(source, "      json.endList(in, size);");
+                line(source, "      json.writeByte(']');");
+                line(source, "    } finally { json.restoreObjectFields(in, enclosingFields); }");
+            } else if (codec instanceof EnumCodec enumeration) {
+                line(source, "    if (json.replayReference(in, (value, out) -> " + method + "(value, out))) return;");
+                line(source, "    int reference = json.beginObject(in, \"" + escape(binaryName(enumeration.element)) + "\");");
+                line(source, "    boolean seen = false;");
+                line(source, "    for (String field : json.objectFields(in)) {");
+                line(source, "      if (field.equals(\"name\")) { json.writeEnumName(in, JSON_ENUM_" + suffix
+                        + ", JSON_ENUM_BYTES_" + suffix + "); seen = true; } else json.skipValue(in);");
+                line(source, "    }");
+                line(source, "    if (!seen) throw new com.reactor.rust.dubbo.runtime.DubboCodecException(\"Missing enum name\");");
+                line(source, "    json.endObject(in, reference);");
+            } else {
+                String erased = types.erasure(type).toString();
+                String call = switch (erased) {
+                    case "boolean", "java.lang.Boolean" -> "json.writeBoolean(json.input(in).readBoolean())";
+                    case "byte", "java.lang.Byte" -> "json.writeLongAscii((byte) json.input(in).readInt())";
+                    case "short", "java.lang.Short" -> "json.writeLongAscii((short) json.input(in).readInt())";
+                    case "int", "java.lang.Integer" -> "json.writeLongAscii(json.input(in).readInt())";
+                    case "long", "java.lang.Long" -> "json.writeLongAscii(json.input(in).readLong())";
+                    case "float", "java.lang.Float" -> "json.writeFloatAscii((float) json.input(in).readDouble())";
+                    case "double", "java.lang.Double" -> "json.writeDoubleAscii(json.input(in).readDouble())";
+                    case "java.lang.String" -> "json.writeString(in)";
+                    case "java.math.BigDecimal" -> "json.writeBigDecimal(in)";
+                    case "java.time.LocalDate" -> "json.writeLocalDate(in)";
+                    default -> throw new IllegalStateException("Unexpected direct JSON type " + type);
+                };
+                line(source, "    " + call + ';');
+            }
+            line(source, "  }");
+        }
+
+        private String jsonBytes(String text, boolean field) {
+            StringBuilder value = new StringBuilder("\"");
+            for (int index = 0; index < text.length(); index++) {
+                char ch = text.charAt(index);
+                if (ch == '\\' || ch == '"') value.append('\\').append(ch);
+                else if (ch < 32) value.append("\\u").append(String.format(java.util.Locale.ROOT, "%04x", (int) ch));
+                else value.append(ch);
+            }
+            value.append('"');
+            if (field) value.append(':');
+            byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
+            StringBuilder code = new StringBuilder("new byte[]{");
+            for (int index = 0; index < bytes.length; index++) {
+                if (index > 0) code.append(',');
+                code.append(bytes[index]);
+            }
+            return code.append('}').toString();
         }
 
         private CodecType describe(TypeMirror type, Element usage) throws IOException {

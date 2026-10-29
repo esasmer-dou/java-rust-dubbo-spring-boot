@@ -49,9 +49,28 @@ Use this library when provider addresses are static or available through Kuberne
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.7.0`.
+Current release: `0.8.0`.
 
-### What Changed In 0.7.0
+### 0.8.0: Forward Typed Results Without Consumer Row DTOs
+
+Use `@DubboStreamed(directJson = true)` when the consumer only forwards a result to HTTP. Generated codecs write typed native values as JSON fields without constructing consumer row DTOs. Use ordinary typed decoding when Java must validate or transform rows.
+
+For Rust-Java REST, add the optional `java-rust-dubbo-rest-adapter:0.8.0`. `DubboJsonResponses.body(result)` uses the existing bounded response protocol. Return that body from the handler to transfer ownership to HTTP. Close it if it will not be submitted. Do not pass an ordinary list: there is no hidden DTO fallback.
+
+Consumption is one-pass. A second attempt fails explicitly. Native ownership ends on completion or cancellation. Use REST 4.8.0 and matching native binaries. Spring applications do not need this REST adapter.
+
+[Release notes](RELEASE_NOTES.md)
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboStreamed;
+
+public interface CatalogService {
+    @DubboStreamed(directJson = true)
+    java.util.List<CatalogRow> listAll();
+}
+```
+
+### What Changed In 0.8.0
 
 Fractional doubles and repeated object references now stay correct when calling supported Apache
 Dubbo/Hessian peers. Upgrade the annotation processor and runtime together, then rebuild your app.
@@ -84,11 +103,11 @@ by a network timeout. Keep JDBC deadlines and idempotency explicit. Native respo
 admission permit remain owned until the Java operation actually completes. Writes are never replayed.
 Set a compatible timeout on the consumer as well.
 
-Use the matching `0.7.0` DLL/SO/dylib for method deadlines. Native ABI stays `3`; new entry points
+Use the matching `0.8.0` DLL/SO/dylib for method deadlines. Native ABI stays `3`; new entry points
 are additive. For optional provider telemetry, use the published
-[Glowroot `0.7.0` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.0):
-`java-rust-glowroot-spring-native-dubbo-adapter:0.7.0`. Keep all agent modules on that version.
-Dubbo `0.7.0` also works independently without that agent; no agent runtime is added transitively.
+[Glowroot `0.7.1` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.1):
+`java-rust-glowroot-spring-native-dubbo-adapter:0.7.1`. Keep all agent modules on 0.7.1.
+Dubbo `0.8.0` also works independently without that agent; no agent runtime is added transitively.
 
 Streaming iterators are one-pass. A second consumption attempt fails with a clear message.
 Only the current item's reference window remains decoder-owned. References inside that item work.
@@ -169,7 +188,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.7.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.8.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>

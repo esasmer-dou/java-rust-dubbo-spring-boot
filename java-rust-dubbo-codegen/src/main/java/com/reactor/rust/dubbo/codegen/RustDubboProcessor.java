@@ -27,6 +27,7 @@ import javax.tools.StandardLocation;
 
 public final class RustDubboProcessor extends AbstractProcessor {
     static final String APACHE_COMPATIBILITY_OPTION = "reactor.dubbo.apacheCompatibility";
+    static final String FRAMEWORK_OPTION = "reactor.dubbo.framework";
     private static final String REFERENCE = "com.reactor.rust.dubbo.annotation.DubboReference";
     private static final String SERVICE = "com.reactor.rust.dubbo.annotation.DubboService";
     private static final String ENABLE = "com.reactor.rust.dubbo.annotation.EnableDubbo";
@@ -48,7 +49,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedOptions() {
-        return Set.of(APACHE_COMPATIBILITY_OPTION);
+        return Set.of(APACHE_COMPATIBILITY_OPTION, FRAMEWORK_OPTION);
     }
 
     @Override
@@ -58,6 +59,13 @@ public final class RustDubboProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnvironment) {
+        String framework = processingEnv.getOptions().getOrDefault(FRAMEWORK_OPTION, "spring");
+        if (!framework.equals("spring") && !framework.equals("plain")) {
+            if (!written) processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "reactor.dubbo.framework must be spring or plain");
+            written = true;
+            return false;
+        }
         collectAnnotated(roundEnvironment, REFERENCE, SERVICE);
         if (apacheCompatibilityEnabled()) {
             collectAnnotated(roundEnvironment, APACHE_REFERENCE, APACHE_SERVICE);
@@ -177,7 +185,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
                 }
             }
             methods.add(new MethodContract(method.name(), method.descriptor(), method.id(),
-                    method.element(), method.type(), method.streamed(), timeout));
+                    method.element(), method.type(), method.streamed(), method.directJson(), timeout));
         }
         return List.copyOf(methods);
     }
@@ -249,12 +257,14 @@ public final class RustDubboProcessor extends AbstractProcessor {
                         + method.getSimpleName() + descriptor;
                 String key = method.getSimpleName() + descriptor;
                 boolean streamed = hasAnnotation(method, STREAMED);
+                boolean directJson = streamed && AnnotationValues.of(method, STREAMED).bool("directJson");
                 if (streamed && !isConcreteList(type.getReturnType())) {
                     error(method, "@DubboStreamed requires a synchronous java.util.List<T> return type");
                     streamed = false;
+                    directJson = false;
                 }
                 result.putIfAbsent(key, new MethodContract(method.getSimpleName().toString(), descriptor,
-                        StableIds.fnv1a32(identity), method, type, streamed, 0));
+                        StableIds.fnv1a32(identity), method, type, streamed, directJson, 0));
             } catch (IllegalArgumentException exception) {
                 error(method, exception.getMessage());
             }
@@ -341,7 +351,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
     }
 
     record MethodContract(String name, String descriptor, int id, ExecutableElement element,
-                          ExecutableType type, boolean streamed, int timeoutMs) {}
+                          ExecutableType type, boolean streamed, boolean directJson, int timeoutMs) {}
     record ReferenceContract(String owner, String field, String contract, String group,
                              String version, boolean check, TypeElement contractElement,
                              List<MethodContract> methods) {}

@@ -73,6 +73,27 @@ public abstract class GeneratedDubboClientSupport {
         }
     }
 
+    protected final <E> List<E> invokeDirectJsonList(
+            int methodId, DubboCallBuffer call, NativeResponseDecoder<E> itemDecoder, Hessian2JsonWriter itemWriter) {
+        NativeResponsePolicy.requireCurrent();
+        NativeResponse response = invoke(methodId, call);
+        Hessian2Input input = new Hessian2Input();
+        boolean transferred = false;
+        try {
+            responseInput(response, input);
+            int flag = requireValueResponse(input);
+            if (isNullResponse(flag) || input.readNull()) return null;
+            List<E> result = DirectJsonResults.open(input, itemDecoder, itemWriter, response::close,
+                    flag == RESPONSE_VALUE_WITH_ATTACHMENTS);
+            transferred = true;
+            return result;
+        } finally {
+            if (!transferred) {
+                try { input.detach(); } finally { response.close(); }
+            }
+        }
+    }
+
     protected final <T> CompletableFuture<T> invokeAsync(
             int methodId, DubboCallBuffer call, NativeResponseDecoder<T> decoder) {
         CompletableFuture<T> result = new CompletableFuture<>();

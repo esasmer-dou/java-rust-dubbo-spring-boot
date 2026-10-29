@@ -1,6 +1,8 @@
 package com.reactor.rust.dubbo.runtime;
 
 import java.math.BigDecimal;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.LocalDate;
@@ -770,5 +772,22 @@ public final class Hessian2Input {
     }
 
     private record ObjectDescriptor(String typeName, String[] fields) {
+    }
+
+    /** Opt-in adapter; all cursor state belongs to a bounded pooled direct context. */
+    public int transcodeStringToUtf8Json(byte[] out, int outPos, OutputStream flushTarget) throws IOException {
+        return Hessian2JsonTranscoder.transcodeString(this, out, outPos, flushTarget);
+    }
+
+    ByteBuffer jsonBuffer() {
+        if (buffer == null) throw new IllegalStateException("Hessian input is not attached");
+        return buffer;
+    }
+
+    int jsonCollectionLimit() { return maxCollectionItems; }
+
+    void jsonListRoot(String typeName) {
+        if (typeName != null) types.add(typeName);
+        reserveReference();
     }
 }

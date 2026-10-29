@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:49e92ed7-a8ba-4d7d-a143-5f3f3366adce",
+  "serialNumber": "urn:uuid:4ba2ecd3-c82f-40ba-a1b6-48cc520d1eff",
   "metadata": {
-    "timestamp": "2026-10-16T12:45:37.703081805Z",
+    "timestamp": "2026-10-29T09:05:20.680074519Z",
     "tools": [
       {
         "vendor": "CycloneDX",
@@ -14,23 +14,23 @@
     ],
     "component": {
       "type": "library",
-      "bom-ref": "path+file:///home/runner/work/java-rust-dubbo-spring-boot-source/java-rust-dubbo-spring-boot-source/rust-dubbo-core#0.7.0",
+      "bom-ref": "path+file:///mnt/e/ReactorRepository/rust-spring-performance/java-rust-dubbo-spring-boot/rust-dubbo-core#0.8.0",
       "name": "rust-dubbo-core",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "scope": "required",
       "licenses": [
         {
           "expression": "Apache-2.0"
         }
       ],
-      "purl": "pkg:cargo/rust-dubbo-core@0.7.0?download_url=file://.",
+      "purl": "pkg:cargo/rust-dubbo-core@0.8.0?download_url=file://.",
       "components": [
         {
           "type": "library",
-          "bom-ref": "path+file:///home/runner/work/java-rust-dubbo-spring-boot-source/java-rust-dubbo-spring-boot-source/rust-dubbo-core#0.7.0 bin-target-0",
+          "bom-ref": "path+file:///mnt/e/ReactorRepository/rust-spring-performance/java-rust-dubbo-spring-boot/rust-dubbo-core#0.8.0 bin-target-0",
           "name": "rust_dubbo_core",
-          "version": "0.7.0",
-          "purl": "pkg:cargo/rust-dubbo-core@0.7.0?download_url=file://.#src/lib.rs"
+          "version": "0.8.0",
+          "purl": "pkg:cargo/rust-dubbo-core@0.8.0?download_url=file://.#src/lib.rs"
         }
       ]
     },
@@ -72,7 +72,7 @@
   ],
   "dependencies": [
     {
-      "ref": "path+file:///home/runner/work/java-rust-dubbo-spring-boot-source/java-rust-dubbo-spring-boot-source/rust-dubbo-core#0.7.0",
+      "ref": "path+file:///mnt/e/ReactorRepository/rust-spring-performance/java-rust-dubbo-spring-boot/rust-dubbo-core#0.8.0",
       "dependsOn": [
         "registry+https://github.com/rust-lang/crates.io-index#bytes@1.12.1"
       ]

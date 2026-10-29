@@ -18,4 +18,10 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface DubboStreamed {
+    /**
+     * Adds optional one-pass direct JSON consumption, selected through DubboSpringJsonStreams.
+     * The declared List type and ordinary DTO/list operations remain available until direct
+     * consumption starts. Choosing either mode permanently excludes the other for that response.
+     */
+    boolean directJson() default false;
 }

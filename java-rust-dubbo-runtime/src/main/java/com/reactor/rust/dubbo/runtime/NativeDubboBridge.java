@@ -143,13 +143,18 @@ public final class NativeDubboBridge {
         if (handle <= 0) {
             throw new DubboNativeException("Native Dubbo response handle is invalid");
         }
-        int status = nativeResponseStatus(handle);
-        ByteBuffer body = nativeResponseBuffer(handle);
-        if (body == null) {
-            nativeReleaseResponse(handle);
-            throw new DubboNativeException("Native Dubbo response body is unavailable");
+        boolean transferred = false;
+        try {
+            int status = nativeResponseStatus(handle);
+            ByteBuffer body = nativeResponseBuffer(handle);
+            if (body == null) throw new DubboNativeException("Native Dubbo response body is unavailable");
+            NativeResponse response = new NativeResponse(handle, status, body);
+            transferred = true;
+            return response;
+        } finally {
+            // JNI exposure or Java wrapper allocation must not abandon a native lease.
+            if (!transferred) nativeReleaseResponse(handle);
         }
-        return new NativeResponse(handle, status, body);
     }
 
     private static final class Holder {

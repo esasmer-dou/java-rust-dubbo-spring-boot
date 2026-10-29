@@ -1,63 +1,31 @@
-# Java Rust Dubbo Spring Boot 0.7.0
+# 0.8.0
 
-## What's New
+Release date: October 29, 2026.
 
-This release fixes Hessian2 interoperability and adds explicit provider method deadlines.
-Business services remain in Java. The generated invocation and codec paths remain reflection-free.
+## What Changed?
 
-```java
-@DubboService(timeout = 1500)
-public final class CatalogServiceImpl implements CatalogService {
-    @Override
-    @DubboMethod(timeoutMs = 300)
-    public CatalogView find(long id) { return repository.find(id); }
-}
-```
+Typed direct JSON callbacks and the optional REST adapter can forward supported native results without building consumer row DTOs. One-pass streaming and bounded response ownership are explicit. Keep ordinary DTO decoding when Java must inspect or transform rows.
 
-`find` uses 300 ms; other methods inherit 1500 ms. Queue wait and asynchronous completion
-consume the same deadline. Expired queued work is not started. A running database operation is
-not canceled or rolled back by a network timeout. Keep JDBC deadlines and idempotency explicit.
-Native buffers and admission permits remain owned until the actual Java completion.
+## How To Use It
 
-Hessian2 integer-thousandth doubles now decode correctly. Fractional output uses standard
-full-width doubles for mixed-peer compatibility. Typed/generated and dynamic reference tables
-stay aligned across records, collections and temporal values. Unsupported immutable cycles
-fail explicitly rather than using reflective construction.
+1. Align your dependency versions with the release set below.
+2. Rebuild the application. Use the native file packaged with the selected JAR; do not mix older DLL/SO files.
+3. Choose the feature you need in the [usage guide](README.md). Optional features are not enabled automatically.
+4. Validate under your own CPU, memory and traffic budgets. Do not blindly retry a timed-out write.
 
-One-pass consumers retain only the current item's reference window, not every completed DTO.
-References within one item work. Cross-item references require normal List materialization before
-opening the iterator; one-pass mode rejects them explicitly. No second parse or weak-reference
-allocation is added. A 10,000-row regression test checks the decoder retains at most the root
-list and current row instead of 10,001 object references.
+## Aligned Versions
 
-The provider telemetry SPI is available in 0.7.0. The matching Glowroot 0.7.0 native-Dubbo
-adapter is published. Keep all agent modules on 0.7.0. Enable it only when provider telemetry is needed. Dubbo 0.7.0
-works independently and does not require the agent. See the agent release notes for
-the measured memory budget and its limits; this is not an always-below-3-MiB guarantee.
+REST/platform: 4.8.0; cache: 0.9.0; Dubbo: 0.9.0; Spring Dubbo: 0.8.0; agent: 0.7.1.
+Sample applications: 0.8.0; shared model/interfaces: 0.5.0.
+Native contracts are unchanged: REST 29, Dubbo 7, Spring Dubbo 3, Redis 6, Glowroot 6.
 
-Upgrade all framework artifacts and the annotation processor to `0.7.0`; rebuild the application.
-Use the matching Windows x64 DLL, Linux x64 GLIBC 2.17 SO, or macOS ARM64 dylib.
-Native ABI remains `3`; the deadline entry point is additive. Previous streaming APIs remain supported.
+## Qualification Scope
 
-## Yenilikler
+Java business logic, reflection-free dispatch and bounded resources are preserved.
+L1 is optional; a net memory reduction is not guaranteed for every workload.
+Consumer warmup rejections remain a separate improvement item.
+A fixed 2.695 ms writer p99 and zero consumer warmup rejections are not general product guarantees.
+Measured correctness and error checks remain applicable. No new all-platform performance guarantee is claimed.
 
-Bu sürüm Hessian2 uyumluluğunu düzeltir. Provider metotlarına ayrı timeout tanımlamayı sağlar.
-İş kodu Java'da kalır. Metot çağrısı ve codec kodu build sırasında üretilir. Reflection eklenmez.
-
-Örnekte `find` için 300 ms, diğer metotlar için 1500 ms kullanılır. Kuyrukta bekleme ve async
-tamamlanma bu süreye dahildir. Kuyrukta süresi dolan iş başlatılmaz. Başlamış DB işlemi ağ timeout'u
-yüzünden durdurulmaz veya geri alınmaz. JDBC timeout'unu ve idempotency kuralını ayrıca belirleyin.
-Java tamamlanana kadar native buffer ve concurrency izni korunur.
-
-Kesirli double değerleri ve tarih/saat içeren sonuçlardaki nesne referansları düzeltildi.
-Tek geçişli tüketim biten öğeleri bellekte tutmaz. Öğeler arası referans içeren sonucu normal
-List olarak okuyun. Böyle bir referans tek geçişli modda açık hata verir. İkinci parse geçişi
-veya öğe başına weak-reference allocation eklenmez.
-Provider telemetri arayüzü 0.7.0 ile kullanılabilir. Uygun Glowroot 0.7.0 adaptörü yayımlandı.
-Tüm agent modüllerini 0.7.0 sürümünde tutun. Yalnız provider telemetrisi gerektiğinde açın.
-Dubbo 0.7.0 agent olmadan da çalışır.
-Ölçülen bellek bütçesi ve sınırları agent sürüm notlarındadır. Her koşulda 3 MiB altında
-kalacağı garanti edilmez. Runtime'a zorunlu agent bağımlılığı eklenmez.
-
-Tüm framework paketlerini ve annotation processor sürümünü `0.7.0` yapın. Uygulamayı yeniden
-derleyin. Aynı sürümün DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
+For GitHub Packages, match the Maven settings.xml server ID to the repository ID.
+Use a token with read:packages and, when required, private repository access. SSH authenticates Git only.

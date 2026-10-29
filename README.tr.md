@@ -1,6 +1,6 @@
 # Java Rust Dubbo Spring Boot
 
-[English](README.md) | [Türkçe](README.tr.md)
+[English](README.md) | [Turkish](README.tr.md)
 
 Spring Boot 3 için reflection kullanmayan bir Dubbo consumer ve provider kütüphanesidir. İş mantığı Java'da kalır. Küçük bir Rust native veri düzlemi; TCP bağlantılarını, Dubbo paketlerini, zaman aşımlarını, heartbeat işlemlerini, backpressure kontrolünü ve provider iletişimini yönetir.
 
@@ -49,9 +49,28 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 - Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.7.0`.
+Güncel sürüm: `0.8.0`.
 
-### 0.7.0 Sürümünde Ne Değişti?
+### 0.8.0: Tipli Sonucu DTO Oluşturmadan Aktarın
+
+Sadece veriyi HTTP yanıtına aktaracaksanız `@DubboStreamed(directJson = true)` kullanın. Üretilen codec, native sonucu JSON alanlarına aktarır. Consumer tarafında her satır için DTO oluşturulmaz. Java satırları doğrulayacak veya değiştirecekse normal tipli sonucu kullanın.
+
+Rust-Java REST için isteğe bağlı `java-rust-dubbo-rest-adapter:0.8.0` ekleyin. `DubboJsonResponses.body(result)` mevcut sınırlı response protokolünü kullanır. Handler bu sonucu döndürür; sahiplik HTTP yanıtına geçer. Sonucu göndermeyecekseniz kapatın. Normal listeyi bu adaptöre vermeyin. Gizli DTO fallback yoktur.
+
+Akış tek geçişlidir. İkinci tüketim açık hata verir. Native yanıt, yazma tamamlandığında veya iptal edildiğinde bırakılır. REST 4.8.0 ve eşleşen native dosyaları kullanın. Spring uygulaması bu REST adaptörüne ihtiyaç duymaz.
+
+[Sürüm notları](RELEASE_NOTES.tr.md)
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboStreamed;
+
+public interface CatalogService {
+    @DubboStreamed(directJson = true)
+    java.util.List<CatalogRow> listAll();
+}
+```
+
+### 0.8.0 Sürümünde Ne Değişti?
 
 Kesirli double değerleri ve aynı nesneye tekrarlayan referanslar düzeltildi. Desteklenen Apache
 Dubbo/Hessian eşleriyle doğru sonuç alınır. Annotation processor ve runtime sürümünü birlikte
@@ -83,11 +102,11 @@ Kuyrukta süresi dolan iş başlatılmaz. Başlamış DB işlemi ağ timeout'u i
 JDBC timeout'unu ve idempotency kuralını ayrıca belirleyin. Java tamamlanana kadar native cevap belleği
 ve concurrency izni korunur. Yazma işlemi kendiliğinden tekrarlanmaz. Consumer timeout'unu da ayarlayın.
 
-Metot timeout'u için aynı sürümün `0.7.0` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
+Metot timeout'u için aynı sürümün `0.8.0` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
 Yeni girişler mevcut API'ye eklenir. İsteğe bağlı provider ölçümü için yayımlanmış
-[Glowroot `0.7.0` adaptörünü](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.0) kullanın:
-`java-rust-glowroot-spring-native-dubbo-adapter:0.7.0`. Tüm agent modüllerini aynı sürümde tutun.
-Dubbo `0.7.0`, agent olmadan da bağımsız çalışır. Runtime'a agent bağımlılığı kendiliğinden eklenmez.
+[Glowroot `0.7.1` adaptörünü](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.1) kullanın:
+`java-rust-glowroot-spring-native-dubbo-adapter:0.7.1`. Tüm agent modüllerini aynı sürümde tutun.
+Dubbo `0.8.0`, agent olmadan da bağımsız çalışır. Runtime'a agent bağımlılığı kendiliğinden eklenmez.
 
 Streaming iterator yalnız bir kez tüketilir. İkinci denemede açık hata mesajı verilir.
 Decoder yalnız o anki öğenin referanslarını tutar. Aynı öğe içindeki referanslar çalışır.
@@ -168,7 +187,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.7.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.8.0</java-rust-dubbo.version>
 </properties>
 
 <repositories>
