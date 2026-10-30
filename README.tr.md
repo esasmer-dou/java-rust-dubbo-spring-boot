@@ -18,7 +18,7 @@ Public paket, Java API'sini ve doğrulanmış Windows, Linux ve Apple Silicon ma
 - [ZooKeeper olmadan Kubernetes](#zookeeper-olmadan-kubernetes-kullanımı)
 - [Birden fazla provider uygulaması](#birden-fazla-provider-uygulaması)
 - [Koşullu reference kullanımı](#koşullu-reference-kullanımı)
-- [Consumer metot zaman aşımı](#consumer-metot-zaman-aşımı-henüz-yayımlanmadı)
+- [Consumer metot ve reference zaman aşımı](#consumer-metot-ve-reference-zaman-aşımı-081-2026-10-30)
 - [Desteklenen contract yapısı](#desteklenen-contract-yapısı)
 - [Tüm property'ler](#tüm-propertyler)
 - [Güvenli tuning](#güvenli-tuning-sırası)
@@ -42,11 +42,15 @@ Spring bean
 
 Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyorsa bu kütüphaneyi kullanın. Registry yönetimi veya çıkarılmış Dubbo özellikleri gerekiyorsa resmî Dubbo'yu kullanın.
 
-## Consumer Metot Zaman Aşımı (Henüz Yayımlanmadı)
+## Consumer Metot Ve Reference Zaman Aşımı: 0.8.1 (2026-10-30)
 
-Bu değişiklik kaynakta hazırlanmıştır. Yayımlanmış `0.8.0` paketinde bulunmaz.
-Güncel annotation processor ve runtime ile istemcileri yeniden derleyin.
-Native ABI `3` ve provider zaman aşımı davranışı değişmez.
+`0.8.1`, üretilmiş consumer istemcilerine metot ve reference zaman aşımı desteği
+ekler; bu özellik `0.8.0` paketinde bulunmaz. İstemcileri `0.8.1` annotation processor,
+enhancer ve runtime ile yeniden derleyin. Eski üretilmiş istemcilerin protected
+runtime overload'ları korunur; sıfır metot override'ı ile delege ederek miras alınan
+zaman aşımını kullanırlar. Native ABI `3`, native dosya baytları ve provider davranışı değişmez.
+
+[Sürüm notları](RELEASE_NOTES.tr.md) | [İngilizce sürüm notları](RELEASE_NOTES.md)
 
 Aşağıdaki sırada ilk tanımlanan değer kullanılır:
 
@@ -99,7 +103,7 @@ Eski üretilmiş istemcilerin runtime girişleri korunur.
 - Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Güncel sürüm: `0.8.0`.
+Sürüm: `0.8.1` (2026-10-30).
 
 ### 0.8.0: Tipli Sonucu DTO Oluşturmadan Aktarın
 
@@ -237,7 +241,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.8.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.8.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -592,7 +596,10 @@ reactor.dubbo.provider.request-timeout-ms=2000
 reactor.dubbo.consumer.timeout-ms=2500
 ```
 
-Bu örnekte database ve dış HTTP timeout değerleri `2000 ms` altında olmalıdır. Metot bazlı `timeout` annotation değeri desteklenmez.
+Bu örnekte database ve dış HTTP timeout değerleri `2000 ms` altında olmalıdır.
+Consumer override için interface metodunda `@DubboMethod(timeoutMs = ...)` veya
+field üzerinde `@DubboReference(timeout = ...)` kullanın. Provider servis ve implementasyon
+metot süreleri ayrıdır; çalışan Java/DB işini zorla durdurmaz.
 
 ### Sıkıştırma
 
@@ -884,6 +891,7 @@ Concurrency öncelik sırası nettir:
 | `interfaceClass`, `interfaceName` | Field tipinden bulunur | İsteğe bağlı contract doğrulamasıdır. Annotation eklenen field zaten servis interface'i tipinde olmalıdır. |
 | `group`, `version` | Boş | Provider servis kimliği ile bire bir aynı olmalıdır. |
 | `check` | `true` | Bu reference'ı başlangıç readiness kontrolüne dahil eder. Yalnızca provider başlangıçta bilinçli olarak opsiyonelse `false` yapın. Retry açmaz. |
+| `timeout` | `0` | Milisaniye cinsinden consumer bekleme bütçesi. Sıfır route/genel ayarı kullanır; interface üzerindeki pozitif `@DubboMethod(timeoutMs=...)` önceliklidir. Aynı interface/group/version istemcisini paylaşan reference'ların normalize edilmiş timeout değerleri aynı olmalıdır; çakışmada derleyici iki alanı da gösterir. |
 
 ### Desteklenmeyen Annotation Parametreleri
 
@@ -891,7 +899,6 @@ Desteklenmeyen değerler sessizce yok sayılmaz. Açıkça kullanılırsa build 
 
 | Parametre | Yerine kullanılacak ayar |
 |---|---|
-| `timeout` | `reactor.dubbo.consumer.timeout-ms` veya `reactor.dubbo.provider.request-timeout-ms` |
 | `connections` | `reactor.dubbo.consumer.connections-per-endpoint` |
 | `payload` | Consumer/provider `max-payload-bytes` property'leri |
 | `retries` | Yalnızca idempotent işlemler için uygulama seviyesinde açık retry; native çağrı otomatik tekrarlanmaz |

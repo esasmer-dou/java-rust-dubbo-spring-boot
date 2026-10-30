@@ -18,7 +18,7 @@ The public package contains the Java API and verified Windows, Linux, and Apple 
 - [Kubernetes without ZooKeeper](#kubernetes-without-zookeeper)
 - [Multiple provider applications](#multiple-provider-applications)
 - [Conditional references](#conditional-references)
-- [Consumer method timeouts](#consumer-method-timeouts-unreleased)
+- [Consumer method and reference timeouts](#consumer-method-and-reference-timeouts-081-2026-10-30)
 - [Supported contracts](#supported-contract-surface)
 - [Configuration reference](#configuration-reference)
 - [Safe tuning](#safe-tuning-order)
@@ -42,11 +42,15 @@ Spring bean
 
 Use this library when provider addresses are static or available through Kubernetes Service DNS. Use official Dubbo when registry governance or the omitted Dubbo features are required.
 
-## Consumer Method Timeouts (Unreleased)
+## Consumer Method And Reference Timeouts: 0.8.1 (2026-10-30)
 
-This change is prepared in source; it is not in the published `0.8.0` package.
-Rebuild generated clients with the matching updated annotation processor and runtime.
-Native ABI `3` and provider timeout behavior are unchanged.
+Version `0.8.1` adds generated consumer method and reference timeouts; these are not
+part of `0.8.0`. Rebuild generated clients with the `0.8.1` annotation processor,
+enhancer and runtime. Existing generated clients retain their protected runtime
+overloads, which delegate with a zero method override and preserve inherited timeouts.
+Native ABI `3`, native binary bytes and provider timeout behavior are unchanged.
+
+[Release notes](RELEASE_NOTES.md) | [Turkish release notes](RELEASE_NOTES.tr.md)
 
 The first configured value wins:
 
@@ -98,7 +102,7 @@ Old generated clients keep their existing runtime entry points.
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Current release: `0.8.0`.
+Release version: `0.8.1` (2026-10-30).
 
 ### 0.8.0: Forward Typed Results Without Consumer Row DTOs
 
@@ -237,7 +241,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.8.0</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.8.1</java-rust-dubbo.version>
 </properties>
 
 <repositories>
@@ -592,7 +596,10 @@ reactor.dubbo.provider.request-timeout-ms=2000
 reactor.dubbo.consumer.timeout-ms=2500
 ```
 
-In this example, database and outbound HTTP timeouts should be below `2000 ms`. Per-method `timeout` annotation values are not supported.
+In this example, database and outbound HTTP timeouts should be below `2000 ms`.
+For consumer overrides, use `@DubboMethod(timeoutMs = ...)` on the interface method
+or `@DubboReference(timeout = ...)` on the field. Provider service and implementation
+method deadlines are separate and do not interrupt running Java/DB work.
 
 ### Compression
 
@@ -884,6 +891,7 @@ Concurrency precedence is explicit:
 | `interfaceClass`, `interfaceName` | Inferred from field | Optional contract validation. The annotated field must already be typed as the service interface. |
 | `group`, `version` | Empty | Must match the provider identity exactly. |
 | `check` | `true` | Includes this reference in startup readiness. Set `false` only when that provider is intentionally optional during startup. It does not enable retries. |
+| `timeout` | `0` | Consumer wait budget in milliseconds. Zero inherits route/global settings; a positive interface `@DubboMethod(timeoutMs=...)` takes precedence. All references sharing interface/group/version must use the same normalized timeout or compilation reports both conflicting fields. |
 
 ### Unsupported Annotation Parameters
 
@@ -891,7 +899,6 @@ Unsupported values are not silently ignored. Explicit use fails the build.
 
 | Parameter | Use instead |
 |---|---|
-| `timeout` | `reactor.dubbo.consumer.timeout-ms` or `reactor.dubbo.provider.request-timeout-ms` |
 | `connections` | `reactor.dubbo.consumer.connections-per-endpoint` |
 | `payload` | Consumer/provider `max-payload-bytes` properties |
 | `retries` | Explicit application retry for idempotent operations only; native calls are not replayed automatically |

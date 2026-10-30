@@ -1,10 +1,22 @@
 # Changelog
 
-## [Unreleased]
+## 0.8.1 - 2026-10-30
 
-- Add generated consumer method and reference timeouts, with compile-time shared-client
-  conflict diagnostics and backward-compatible runtime overloads. Keep provider deadlines
-  and native ABI 3 unchanged. Stream timeouts cover full frame arrival, not consumption.
+- Generate consumer wait budgets for interface `@DubboMethod(timeoutMs=...)` and field
+  `@DubboReference(timeout=...)`: method > reference > route > global. Apply the same
+  precedence to synchronous, asynchronous, streamed and direct JSON invocations.
+- Reject conflicting normalized reference timeouts for a shared interface/group/version
+  client at compilation; diagnostics name both fields and values. Zero inherits
+  route/global settings; Apache-compatible `-1` also normalizes to inheritance.
+- Preserve existing protected runtime overloads and old generated clients. Old overloads
+  delegate with a zero method override; rebuild with the aligned 0.8.1 processor,
+  enhancer and runtime to enable newly generated timeout constants.
+- Keep consumer timeouts separate from provider deadlines. Streaming limits full frame
+  arrival, not later iteration or JSON output. A client timeout does not interrupt or
+  roll back provider work and does not trigger automatic RPC replay.
+- Keep native ABI `3` and packaged DLL/SO/dylib bytes unchanged. Only Java release
+  coordinates and documentation advance; no new cross-platform performance claim.
+
 
 ## 0.8.0 - 2026-10-29
 

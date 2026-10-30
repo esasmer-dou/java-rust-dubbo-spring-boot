@@ -1,5 +1,24 @@
 # Değişiklik Kaydı
 
+## 0.8.1 - 2026-10-30
+
+- Interface üzerindeki `@DubboMethod(timeoutMs=...)` ve field üzerindeki
+  `@DubboReference(timeout=...)` ile consumer bekleme bütçesi üretilir.
+  Öncelik: metot > reference > route > genel ayar. Senkron, asenkron, streamed ve
+  direct JSON çağrılarında aynı sıra uygulanır.
+- Aynı interface/group/version istemcisinin normalize edilmiş reference süreleri
+  çakışırsa derleme durur; mesaj iki alanı ve değerlerini gösterir. Sıfır route/genel
+  ayarı kullanır; Apache uyumlu `-1` değeri de miras almaya normalize edilir.
+- Eski protected runtime overload'ları ve üretilmiş istemciler korunur. Eski overload'lar
+  sıfır metot override'ı ile delege eder. Yeni sabitleri üretmek için uygulamayı uyumlu
+  0.8.1 processor, enhancer ve runtime ile yeniden derleyin.
+- Consumer süresi provider deadline'ından ayrıdır. Streaming süresi yanıt paketinin
+  tamamı gelene kadardır; sonraki iterator/JSON tüketimini kapsamaz. Client timeout'u
+  provider işini kesmez veya geri almaz; RPC kendiliğinden tekrarlanmaz.
+- Native ABI `3` ve paketlenmiş DLL/SO/dylib baytları değişmez. Yalnız Java sürüm
+  koordinatları ve belgeler ilerler; yeni bir tüm-platform performans iddiası yoktur.
+
+
 ## 0.8.0 - 2026-10-29
 
 - İsteğe bağlı REST adaptörü, desteklenen Hessian listelerini consumer tarafında satır DTO'ları oluşturmadan JSON'a yazar. Java'nın satırları işlemesi gereken durumlarda normal DTO yolu korunur.

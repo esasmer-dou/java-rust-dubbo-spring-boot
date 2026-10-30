@@ -1,3 +1,46 @@
+# 0.8.1
+
+Release date: 2026-10-30.
+
+## Generated Consumer Timeouts
+
+The annotation processor now generates consumer wait budgets for interface
+`@DubboMethod(timeoutMs = ...)` and field `@DubboReference(timeout = ...)`.
+The first configured value wins: method > reference > route > global.
+Synchronous, asynchronous, streamed and direct JSON consumers follow the same rule.
+
+Method values must be positive. Canonical reference `0` inherits route/global
+configuration; negative canonical values fail compilation. Apache-compatible
+reference `-1` also means inheritance. References sharing interface/group/version
+share a client and must use the same normalized reference timeout, including zero.
+Conflicts fail compilation with both field names and values; different
+groups or versions remain independent.
+
+## Upgrade And Compatibility
+
+Align all Spring Dubbo Maven modules, the annotation processor and enhancer plugin
+to `0.8.1`, then rebuild the application to regenerate clients. Existing generated
+clients keep working: old protected runtime overloads remain and delegate with a
+zero method override, preserving their inherited timeout behavior.
+
+Native ABI stays `3`. Packaged Windows DLL, Linux SO and macOS dylib bytes are
+unchanged; their Maven coordinates advance to `0.8.1`. No native source or binary
+change is part of this patch. Provider service/implementation deadlines are unchanged.
+
+## Failure And Qualification Boundaries
+
+Consumer timeout limits client waiting, not provider execution. It does not interrupt
+or roll back running Java/DB work. Keep downstream deadlines, idempotency and explicit
+failure handling; do not blindly retry a timed-out write. No automatic RPC replay is added.
+
+For streamed/direct JSON results the budget covers full response-frame arrival,
+not subsequent iterator consumption, projection or HTTP output. Resource ownership
+remains bounded and must still be closed on failure or disconnect.
+No new full-load, all-platform performance or zero-rejection guarantee is claimed.
+Historical performance limitations and qualification evidence remain unchanged.
+
+---
+
 # 0.8.0
 
 Release date: October 29, 2026.
