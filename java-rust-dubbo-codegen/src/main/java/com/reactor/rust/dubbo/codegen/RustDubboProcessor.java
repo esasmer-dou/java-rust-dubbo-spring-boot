@@ -32,6 +32,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
     private static final String SERVICE = "com.reactor.rust.dubbo.annotation.DubboService";
     private static final String ENABLE = "com.reactor.rust.dubbo.annotation.EnableDubbo";
     private static final String STREAMED = "com.reactor.rust.dubbo.annotation.DubboStreamed";
+    private static final String METHOD = "com.reactor.rust.dubbo.annotation.DubboMethod";
     private static final String APACHE_REFERENCE = "org.apache.dubbo.config.annotation.DubboReference";
     private static final String APACHE_SERVICE = "org.apache.dubbo.config.annotation.DubboService";
     private static final String APACHE_ENABLE =
@@ -120,7 +121,13 @@ public final class RustDubboProcessor extends AbstractProcessor {
         String contractName = processingEnv.getElementUtils().getBinaryName(contract).toString();
         AnnotationValues values = AnnotationValues.of(field, annotationName);
         if (!values.rejectUnsupported(field, Set.of(
-                "interfaceClass", "interfaceName", "version", "group", "check"), processingEnv)) {
+                "interfaceClass", "interfaceName", "version", "group", "check", "timeout"), processingEnv)) {
+            return;
+        }
+        int timeout = values.integer("timeout", 0);
+        if (timeout < (annotationName.equals(APACHE_REFERENCE) ? -1 : 0)) {
+            error(field, "@DubboReference timeout must not be negative"
+                    + (annotationName.equals(APACHE_REFERENCE) ? " (Apache -1 means inherit)" : ""));
             return;
         }
         if (!validateExplicitContract(field, contract, values)) {
@@ -133,7 +140,44 @@ public final class RustDubboProcessor extends AbstractProcessor {
         }
         references.put(key, new ReferenceContract(ownerName, field.getSimpleName().toString(), contractName,
                 values.string("group"), values.string("version"), values.bool("check", true),
-                contract, methods(contract)));
+                Math.max(timeout, 0), field, contract, consumerMethods(contract)));
+    }
+
+    private List<MethodContract> consumerMethods(TypeElement contract) {
+        List<MethodContract> methods = new ArrayList<>();
+        for (MethodContract method : methods(contract)) {
+            int timeout = 0;
+            if (hasAnnotation(method.element(), METHOD)) {
+                timeout = AnnotationValues.of(method.element(), METHOD).integer("timeoutMs", 0);
+                if (timeout <= 0) error(method.element(), "@DubboMethod timeoutMs must be positive");
+            }
+            methods.add(new MethodContract(method.name(), method.descriptor(), method.id(),
+                    method.element(), method.type(), method.streamed(), method.directJson(), timeout));
+        }
+        return List.copyOf(methods);
+    }
+
+    private boolean validateReferenceTimeouts() {
+        Map<String, List<ReferenceContract>> clients = new LinkedHashMap<>();
+        for (ReferenceContract reference : references.values()) {
+            String key = reference.contract() + '|' + reference.group() + '|' + reference.version();
+            clients.computeIfAbsent(key, ignored -> new ArrayList<>()).add(reference);
+        }
+        boolean valid = true;
+        for (var client : clients.entrySet()) {
+            ReferenceContract first = client.getValue().getFirst();
+            for (ReferenceContract reference : client.getValue()) {
+                if (first.timeoutMs() == reference.timeoutMs()) continue;
+                String message = "Conflicting @DubboReference timeout for shared client "
+                        + client.getKey() + ": " + first.owner() + '#' + first.field() + "=" + first.timeoutMs()
+                        + " and " + reference.owner() + '#' + reference.field() + "=" + reference.timeoutMs()
+                        + "; use the same timeout (including 0) or a different group/version";
+                for (ReferenceContract field : client.getValue()) error(field.fieldElement(), message);
+                valid = false;
+                break;
+            }
+        }
+        return valid;
     }
 
     private void collectService(Element element, String annotationName) {
@@ -296,6 +340,9 @@ public final class RustDubboProcessor extends AbstractProcessor {
         if (references.isEmpty() && services.isEmpty()) {
             return;
         }
+        if (!validateReferenceTimeouts()) {
+            return;
+        }
         try {
             Filer filer = processingEnv.getFiler();
             var resource = filer.createResource(StandardLocation.CLASS_OUTPUT, "",
@@ -353,7 +400,8 @@ public final class RustDubboProcessor extends AbstractProcessor {
     record MethodContract(String name, String descriptor, int id, ExecutableElement element,
                           ExecutableType type, boolean streamed, boolean directJson, int timeoutMs) {}
     record ReferenceContract(String owner, String field, String contract, String group,
-                             String version, boolean check, TypeElement contractElement,
+                             String version, boolean check, int timeoutMs,
+                             VariableElement fieldElement, TypeElement contractElement,
                              List<MethodContract> methods) {}
     record ServiceContract(String implementation, String contract, String group, String version,
                            String executor, boolean async, boolean export, int executes,

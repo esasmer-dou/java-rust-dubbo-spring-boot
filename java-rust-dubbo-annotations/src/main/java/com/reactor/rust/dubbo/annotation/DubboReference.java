@@ -20,4 +20,7 @@ public @interface DubboReference {
     String group() default "";
 
     boolean check() default true;
+
+    /** Consumer wait timeout in milliseconds; zero inherits route/global configuration. */
+    int timeout() default 0;
 }

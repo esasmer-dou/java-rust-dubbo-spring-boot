@@ -247,7 +247,9 @@ final class GeneratedSourceWriter {
                     + " implements " + reference.contractElement().getQualifiedName() + " {");
             line(source, "    private " + clientClass(reference)
                     + "(int clientId, com.reactor.rust.dubbo.runtime.DubboClientOptions options) {");
-            line(source, "      super(clientId, options.timeoutMs(), options.maxCollectionItems(),"
+            String timeout = reference.timeoutMs() == 0
+                    ? "options.timeoutMs()" : Integer.toString(reference.timeoutMs());
+            line(source, "      super(clientId, " + timeout + ", options.maxCollectionItems(),"
                     + " options.initialBufferBytes(), options.retainedBuffers(),"
                     + " options.maxRetainedBufferBytes());");
             line(source, "    }");
@@ -262,6 +264,7 @@ final class GeneratedSourceWriter {
     private void emitClientMethod(StringBuilder source, RustDubboProcessor.MethodContract method) {
         ExecutableType signature = method.type();
         String returnType = signature.getReturnType().toString();
+        String timeout = method.timeoutMs() == 0 ? "" : ", " + method.timeoutMs();
         line(source, "    @Override");
         line(source, "    public " + returnType + ' ' + method.name() + '('
                 + parameters(signature) + ") {");
@@ -276,11 +279,11 @@ final class GeneratedSourceWriter {
             TypeMirror itemType = listType.getTypeArguments().get(0);
             if (method.directJson()) {
                 line(source, "        return invokeDirectJsonList(" + method.id()
-                        + ", call, in -> " + codecs.readCall(itemType, "in")
+                        + ", call" + timeout + ", in -> " + codecs.readCall(itemType, "in")
                         + ", (in, json) -> " + codecs.jsonCall(itemType, "in", "json") + ");");
             } else {
                 line(source, "        return invokeStreamedList(" + method.id()
-                        + ", call, in -> " + codecs.readCall(itemType, "in") + ");");
+                        + ", call" + timeout + ", in -> " + codecs.readCall(itemType, "in") + ");");
             }
             line(source, "      }");
             line(source, "    }");
@@ -293,7 +296,7 @@ final class GeneratedSourceWriter {
             } catch (IOException error) {
                 throw new IllegalStateException(error);
             }
-            line(source, "        return invokeAsync(" + method.id() + ", call, in -> {");
+            line(source, "        return invokeAsync(" + method.id() + ", call" + timeout + ", in -> {");
             line(source, "          int responseFlag = requireValueResponse(in);");
             if (isErasure(valueType, "java.lang.Void")) {
                 line(source, "          return null;");
@@ -307,7 +310,7 @@ final class GeneratedSourceWriter {
             return;
         }
         line(source, "        try (com.reactor.rust.dubbo.runtime.NativeResponse response = invoke("
-                + method.id() + ", call)) {");
+                + method.id() + ", call" + timeout + ")) {");
         line(source, "          com.reactor.rust.dubbo.runtime.Hessian2Input in = responseInput(response, call);");
         line(source, "          int responseFlag = requireValueResponse(in);");
         if (signature.getReturnType().getKind() == TypeKind.VOID) {
@@ -556,9 +559,11 @@ final class GeneratedSourceWriter {
         StringBuilder value = new StringBuilder();
         for (RustDubboProcessor.ReferenceContract reference : references) {
             value.append('R').append(clientKey(reference)).append(reference.check());
+            if (reference.timeoutMs() != 0) value.append(":timeout=").append(reference.timeoutMs());
             for (RustDubboProcessor.MethodContract method : reference.methods()) {
                 value.append(method.id()).append(method.streamed());
                 if (method.directJson()) value.append("directJson");
+                if (method.timeoutMs() != 0) value.append(":timeout=").append(method.timeoutMs());
             }
         }
         for (RustDubboProcessor.ServiceContract service : services) {

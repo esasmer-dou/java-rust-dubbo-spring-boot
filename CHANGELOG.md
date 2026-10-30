@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- Add generated consumer method and reference timeouts, with compile-time shared-client
+  conflict diagnostics and backward-compatible runtime overloads. Keep provider deadlines
+  and native ABI 3 unchanged. Stream timeouts cover full frame arrival, not consumption.
+
 ## 0.8.0 - 2026-10-29
 
 - Connect direct Hessian-to-JSON lists to an optional Rust-Java REST owned-body

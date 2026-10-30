@@ -18,6 +18,7 @@ The public package contains the Java API and verified Windows, Linux, and Apple 
 - [Kubernetes without ZooKeeper](#kubernetes-without-zookeeper)
 - [Multiple provider applications](#multiple-provider-applications)
 - [Conditional references](#conditional-references)
+- [Consumer method timeouts](#consumer-method-timeouts-unreleased)
 - [Supported contracts](#supported-contract-surface)
 - [Configuration reference](#configuration-reference)
 - [Safe tuning](#safe-tuning-order)
@@ -40,6 +41,54 @@ Spring bean
 ```
 
 Use this library when provider addresses are static or available through Kubernetes Service DNS. Use official Dubbo when registry governance or the omitted Dubbo features are required.
+
+## Consumer Method Timeouts (Unreleased)
+
+This change is prepared in source; it is not in the published `0.8.0` package.
+Rebuild generated clients with the matching updated annotation processor and runtime.
+Native ABI `3` and provider timeout behavior are unchanged.
+
+The first configured value wins:
+
+1. Interface method `@DubboMethod(timeoutMs = ...)`.
+2. Injection field `@DubboReference(timeout = ...)`.
+3. Route property `reactor.dubbo.consumer.routes.<name>.timeout-ms`.
+4. Global property `reactor.dubbo.consumer.timeout-ms`.
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboMethod;
+import com.reactor.rust.dubbo.annotation.DubboReference;
+
+interface CustomerQueries {
+    @DubboMethod(timeoutMs = 250)
+    String findName(long id);
+
+    String describe(long id);
+}
+
+final class CustomerFacade {
+    @DubboReference(timeout = 1200)
+    private CustomerQueries customers;
+
+    String name(long id) { return customers.findName(id); } // 250 ms
+    String description(long id) { return customers.describe(id); } // 1200 ms
+}
+```
+
+Use positive method values. A canonical reference timeout of `0` inherits route/global
+configuration; negative values fail compilation. Apache-compatible references also
+accept `-1` as inheritance. References sharing the same interface, group and version
+share one client: give all of them the same reference timeout, including `0`, or
+compilation fails and names both fields. Different groups or versions are independent.
+
+These are consumer wait limits, not provider deadlines. A shorter consumer timeout
+does not cancel work already running at the provider. Use an idempotency key for
+writes; do not blindly retry a timed-out write.
+
+For streamed and direct JSON results, the timeout ends when the complete native
+response frame arrives. It does not limit subsequent iterator or JSON output consumption.
+Values are compiled to integer constants; no new timer, thread or lookup is added.
+Old generated clients keep their existing runtime entry points.
 
 ## Requirements
 

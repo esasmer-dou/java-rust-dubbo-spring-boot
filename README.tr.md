@@ -18,6 +18,7 @@ Public paket, Java API'sini ve doğrulanmış Windows, Linux ve Apple Silicon ma
 - [ZooKeeper olmadan Kubernetes](#zookeeper-olmadan-kubernetes-kullanımı)
 - [Birden fazla provider uygulaması](#birden-fazla-provider-uygulaması)
 - [Koşullu reference kullanımı](#koşullu-reference-kullanımı)
+- [Consumer metot zaman aşımı](#consumer-metot-zaman-aşımı-henüz-yayımlanmadı)
 - [Desteklenen contract yapısı](#desteklenen-contract-yapısı)
 - [Tüm property'ler](#tüm-propertyler)
 - [Güvenli tuning](#güvenli-tuning-sırası)
@@ -40,6 +41,55 @@ Spring bean
 ```
 
 Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyorsa bu kütüphaneyi kullanın. Registry yönetimi veya çıkarılmış Dubbo özellikleri gerekiyorsa resmî Dubbo'yu kullanın.
+
+## Consumer Metot Zaman Aşımı (Henüz Yayımlanmadı)
+
+Bu değişiklik kaynakta hazırlanmıştır. Yayımlanmış `0.8.0` paketinde bulunmaz.
+Güncel annotation processor ve runtime ile istemcileri yeniden derleyin.
+Native ABI `3` ve provider zaman aşımı davranışı değişmez.
+
+Aşağıdaki sırada ilk tanımlanan değer kullanılır:
+
+1. Interface metodundaki `@DubboMethod(timeoutMs = ...)`.
+2. Bağımlılık alanındaki `@DubboReference(timeout = ...)`.
+3. Route ayarı: `reactor.dubbo.consumer.routes.<name>.timeout-ms`.
+4. Genel ayar: `reactor.dubbo.consumer.timeout-ms`.
+
+```java
+import com.reactor.rust.dubbo.annotation.DubboMethod;
+import com.reactor.rust.dubbo.annotation.DubboReference;
+
+interface CustomerQueries {
+    @DubboMethod(timeoutMs = 250)
+    String findName(long id);
+
+    String describe(long id);
+}
+
+final class CustomerFacade {
+    @DubboReference(timeout = 1200)
+    private CustomerQueries customers;
+
+    String name(long id) { return customers.findName(id); } // 250 ms
+    String description(long id) { return customers.describe(id); } // 1200 ms
+}
+```
+
+Metot değeri pozitif olmalıdır. Canonical reference için `0`, route veya genel ayarı
+kullanır. Negatif değer derleme hatasıdır. Apache uyumlu reference için `-1` de
+miras alma anlamına gelir. Interface, group ve version değerleri aynı olan alanlar
+tek istemciyi paylaşır. Bu alanların reference timeout değerleri `0` dahil aynı
+olmalıdır. Aksi durumda derleme durur ve mesajda iki alan da gösterilir.
+Group veya version farklıysa istemciler bağımsızdır.
+
+Bu ayar consumer'ın bekleme süresidir. Provider'ın çalışma süresini değiştirmez.
+Consumer daha erken vazgeçse bile provider işi tamamlayabilir. Yazma işlemlerinde
+idempotency key kullanın. Zaman aşımına uğrayan yazmayı kontrolsüz tekrarlamayın.
+
+Streamed ve direct JSON sonuçlarda süre, native yanıt paketinin tamamı alınınca biter.
+Sonraki iterator tüketimi veya JSON çıktısının yazılması bu süreye dahil değildir.
+Değerler derlemede sabit tamsayıya dönüşür. Yeni timer, thread veya arama eklenmez.
+Eski üretilmiş istemcilerin runtime girişleri korunur.
 
 ## Gereksinimler
 

@@ -31,8 +31,20 @@ public abstract class GeneratedDubboClientSupport {
     }
 
     protected final NativeResponse invoke(int methodId, DubboCallBuffer call) {
+        return invoke(methodId, call, 0);
+    }
+
+    /** Uses the configured client timeout when {@code methodTimeoutMs} is zero. */
+    protected final NativeResponse invoke(int methodId, DubboCallBuffer call, int methodTimeoutMs) {
         return NativeDubboBridge.invoke(clientId, methodId, call.requestBuffer(),
-                call.requestLength(), timeoutMs);
+                call.requestLength(), effectiveTimeout(methodTimeoutMs, timeoutMs));
+    }
+
+    static int effectiveTimeout(int methodTimeoutMs, int configuredTimeoutMs) {
+        if (methodTimeoutMs < 0) {
+            throw new IllegalArgumentException("methodTimeoutMs must not be negative");
+        }
+        return methodTimeoutMs == 0 ? configuredTimeoutMs : methodTimeoutMs;
     }
 
     protected final Hessian2Input responseInput(NativeResponse response, DubboCallBuffer call) {
@@ -51,7 +63,18 @@ public abstract class GeneratedDubboClientSupport {
 
     protected final <E> List<E> invokeStreamedList(
             int methodId, DubboCallBuffer call, NativeResponseDecoder<E> itemDecoder) {
-        NativeResponse response = invoke(methodId, call);
+        return invokeStreamedList(methodId, call, 0, itemDecoder);
+    }
+
+    /**
+     * Limits the wait for the complete native response frame, not subsequent list consumption.
+     * A zero method timeout inherits the configured client timeout. This does not impose a
+     * provider execution deadline or cancel business work already running at the provider.
+     */
+    protected final <E> List<E> invokeStreamedList(
+            int methodId, DubboCallBuffer call, int methodTimeoutMs,
+            NativeResponseDecoder<E> itemDecoder) {
+        NativeResponse response = invoke(methodId, call, methodTimeoutMs);
         Hessian2Input input = new Hessian2Input();
         boolean ownershipTransferred = false;
         try {
@@ -75,8 +98,19 @@ public abstract class GeneratedDubboClientSupport {
 
     protected final <E> List<E> invokeDirectJsonList(
             int methodId, DubboCallBuffer call, NativeResponseDecoder<E> itemDecoder, Hessian2JsonWriter itemWriter) {
+        return invokeDirectJsonList(methodId, call, 0, itemDecoder, itemWriter);
+    }
+
+    /**
+     * Limits the wait for the complete native response frame, not subsequent JSON projection,
+     * result consumption or HTTP output. A zero method timeout inherits the client timeout;
+     * it is not a provider execution deadline or an output deadline.
+     */
+    protected final <E> List<E> invokeDirectJsonList(
+            int methodId, DubboCallBuffer call, int methodTimeoutMs,
+            NativeResponseDecoder<E> itemDecoder, Hessian2JsonWriter itemWriter) {
         NativeResponsePolicy.requireCurrent();
-        NativeResponse response = invoke(methodId, call);
+        NativeResponse response = invoke(methodId, call, methodTimeoutMs);
         Hessian2Input input = new Hessian2Input();
         boolean transferred = false;
         try {
@@ -96,6 +130,13 @@ public abstract class GeneratedDubboClientSupport {
 
     protected final <T> CompletableFuture<T> invokeAsync(
             int methodId, DubboCallBuffer call, NativeResponseDecoder<T> decoder) {
+        return invokeAsync(methodId, call, 0, decoder);
+    }
+
+    /** Uses the configured client timeout when {@code methodTimeoutMs} is zero. */
+    protected final <T> CompletableFuture<T> invokeAsync(
+            int methodId, DubboCallBuffer call, int methodTimeoutMs,
+            NativeResponseDecoder<T> decoder) {
         CompletableFuture<T> result = new CompletableFuture<>();
         NativeDubboAsyncCallback callback = new NativeDubboAsyncCallback() {
             private final Hessian2Input input = new Hessian2Input();
@@ -119,7 +160,7 @@ public abstract class GeneratedDubboClientSupport {
         };
         try {
             NativeDubboBridge.invokeAsync(clientId, methodId, call.requestBuffer(),
-                    call.requestLength(), timeoutMs, callback);
+                    call.requestLength(), effectiveTimeout(methodTimeoutMs, timeoutMs), callback);
         } catch (Throwable error) {
             result.completeExceptionally(error);
         }
