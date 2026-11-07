@@ -42,7 +42,17 @@ tests remain private.
 Native SBOM metadata is refreshed from the existing dependency inventory after
 verifying the locked dependency graph is unchanged except workspace versions.
 This is a metadata refresh, not a claim that SBOM generation or runtime tests ran
-in the compile-only workflow. Public push and publication have not been performed.
+in the compile-only workflow.
+
+Public push and stable `0.8.2` publication completed on November 7, 2026.
+[Verified-distribution publication run `42352258715`](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/actions/runs/42352258715)
+succeeded from `refs/heads/master` at `d9b9a1ff696432cccb2cb3ae0dcc9222c45f512a`;
+`refs/tags/v0.8.2` identifies that published source. All 31 Maven POM/JAR files
+passed fresh authenticated download and SHA-256 verification. The release asset
+[publication-verification.json](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/releases/download/v0.8.2/publication-verification.json)
+records those file hashes and the source commit. Publication does not extend the
+Linux-only correctness scope, qualify the skipped allocation checks or close
+**R-P05-HTTP-001**.
 
 ---
 

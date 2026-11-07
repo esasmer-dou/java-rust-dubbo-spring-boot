@@ -11,7 +11,15 @@ Public paket, desteklenen Java API'sini ve Windows, Linux ve Apple Silicon macOS
 Kararlı sürüm: 7 Kasım 2026. Yeni native dosyasıyla Linux x64 doğruluk kontrolü
 EmaTech üzerinde geçti: toplam 319 test, 311 başarılı, 8 allocation kontrolü
 atlandı; hata veya başarısızlık yok. Windows x64 ve macOS ARM64 yalnız derlendi;
-bu sürüm için runtime davranışları doğrulanmadı. Yayın ayrı bir adımdır.
+bu sürüm için runtime davranışları doğrulanmadı.
+
+Public `0.8.2` yayını 7 Kasım 2026'da tamamlandı.
+[Doğrulanmış dağıtım yayın çalışması `42352258715`](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/actions/runs/42352258715),
+`refs/heads/master` üzerindeki `d9b9a1ff696432cccb2cb3ae0dcc9222c45f512a`
+commit'iyle başarılı oldu; `refs/tags/v0.8.2` aynı kaynağı gösterir. Toplam 31 Maven
+POM/JAR dosyası yeniden, kimlik doğrulamalı indirilip SHA-256 ile doğrulandı;
+[publication-verification.json](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/releases/download/v0.8.2/publication-verification.json)
+kaydına bakın. Paketlerin yayımlanması runtime veya performans kabul kapsamını genişletmez.
 
 Processor, enhancer, runtime, adaptör ve native JAR'ları `0.8.2` sürümüne hizalayın;
 istemcileri yeniden üretin. Codec artık `char`/`Character` için standart Hessian

@@ -41,7 +41,18 @@ platform kabulü için zorunlu kontrol uygulamaz. Rust ve iç testler private ka
 
 Native SBOM metadata'sı, kilitli bağımlılık grafiğinde yalnız workspace sürümlerinin
 değiştiği doğrulandıktan sonra mevcut envanterden güncellenir. Compile-only workflow'da
-SBOM üretildiği veya runtime testi çalıştığı iddia edilmez. Public push ve yayın yapılmadı.
+SBOM üretildiği veya runtime testi çalıştığı iddia edilmez.
+
+Public push ve kararlı `0.8.2` yayını 7 Kasım 2026'da tamamlandı.
+[Doğrulanmış dağıtım yayın çalışması `42352258715`](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/actions/runs/42352258715),
+`refs/heads/master` üzerindeki `d9b9a1ff696432cccb2cb3ae0dcc9222c45f512a`
+commit'iyle başarılı oldu; `refs/tags/v0.8.2` yayımlanan kaynağı gösterir. Toplam
+31 Maven POM/JAR dosyası yeniden, kimlik doğrulamalı indirilip SHA-256 ile doğrulandı.
+Release dosyası
+[publication-verification.json](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/releases/download/v0.8.2/publication-verification.json),
+dosya hash'lerini ve kaynak commit'ini kaydeder. Yayın, yalnız Linux için olan
+doğruluk kabulünü genişletmez, atlanan allocation kontrollerini doğrulamaz veya
+**R-P05-HTTP-001** riskini kapatmaz.
 
 ---
 
