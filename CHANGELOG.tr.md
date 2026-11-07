@@ -132,6 +132,5 @@
 - GitHub Packages yayını, source JAR'lar, Java/Rust SBOM dosyaları, checksum dosyası ve boş Maven cache consumer gate'i eklendi.
 - CI, pinlenmiş GitHub Actions, Dependabot, stable release notları ve kalıcı release kanıtı eklendi.
 - 10.000 çağrılık Spring Boot container RPC gate'i otomatikleştirildi. Eski snapshot artifact'inin yanlışlıkla image'a girmesini önlemek için benchmark image'ları sürümden bağımsız `target/app.jar` kullanır.
-- NMC uyumluluk profili private `com.zenia` artifact'lerine ihtiyaç duyduğu için isteğe bağlı bırakıldı. Bu artifact'ler framework package'ına veya bağımsız release workflow'una girmez.
 
 Bu sürüm ilk stable release'tir.

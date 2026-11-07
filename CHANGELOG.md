@@ -158,6 +158,5 @@
 - Added GitHub Packages publication, source JARs, Java/Rust SBOMs, checksums, and an empty-cache consumer gate.
 - Added CI, pinned GitHub Actions, Dependabot, stable release notes, and durable release evidence.
 - Added an automated 10,000-call Spring Boot container RPC gate. Benchmark images now consume a version-independent `target/app.jar` to prevent stale snapshot artifacts.
-- Kept the NMC compatibility profile opt-in because it requires private `com.zenia` artifacts. Those artifacts are not part of the framework package or its standalone release workflow.
 
 This is the first stable release.
