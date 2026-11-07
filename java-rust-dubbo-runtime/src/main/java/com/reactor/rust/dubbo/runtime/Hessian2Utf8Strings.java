@@ -2,13 +2,12 @@ package com.reactor.rust.dubbo.runtime;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 
 /** Reusable strict Hessian UTF-16-length / CESU-8 cursor, producing Unicode scalars. */
 final class Hessian2Utf8Strings {
     private static final byte[] HEX = "0123456789abcdef".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
     private final Hessian2JsonInput budget;
-    private ByteBuffer source;
+    private Hessian2JsonCursor source;
     private int chunkStart = -1;
     private int remaining;
     private int pendingLow = -1;
@@ -16,7 +15,7 @@ final class Hessian2Utf8Strings {
 
     Hessian2Utf8Strings(Hessian2JsonInput budget) { this.budget = budget; }
 
-    void begin(ByteBuffer source) {
+    void begin(Hessian2JsonCursor source) {
         this.source = source;
         remaining = 0;
         pendingLow = -1;
@@ -98,69 +97,127 @@ final class Hessian2Utf8Strings {
         return source.get() & 255;
     }
 
-    int writeJson(byte[] out, int position, OutputStream target, boolean number, Hessian2JsonTranscoder writer) throws IOException {
-        if (out == null || out.length < 8 || position < 0 || position > out.length || target == null) {
-            throw new IllegalArgumentException("JSON string output requires a buffer of at least 8 bytes and a valid position/target");
-        }
+    int writeString(byte[] out, int position, OutputStream target, Hessian2JsonTranscoder writer) throws IOException {
+        validateOutput(out, position, target);
         int limit = writer.stringLimit(out.length);
         if (position >= limit) { writer.flushString(out, position, target); position = 0; limit = writer.stringLimit(out.length); }
         if (limit == 0) throw Hessian2JsonTranscoder.outputBudget();
-        if (!number) out[position++] = '"';
-        int numberState = 0;
-        int count = 0;
-        int fractionDigits = 0;
-        long exponent = 0;
-        boolean negativeExponent = false;
+        out[position++] = '"';
+        int scanAfter = 0;
         int value;
-        while ((value = scalar()) >= 0) {
-            int width = number ? 1 : value == '"' || value == '\\' ? 2 : value < 32 ? 6
+        while (true) {
+            if (pendingLow < 0 && remaining > 0 && source.position() >= scanAfter) {
+                int start = source.position();
+                int available = Math.min(remaining, Math.min(source.remaining(), limit - position));
+                // Validate in the final output buffer, not through repeated direct-buffer reads.
+                // Only the validated prefix is consumed or exposed to the output target.
+                source.get(out, position, available);
+                long run = jsonUtf8Run(out, position, available, remaining);
+                int copied = (int) run;
+                source.position(start + copied);
+                // Do not recopy an escaped or partial tail on every scalar (quadratic work).
+                scanAfter = start + available;
+                remaining -= (int) (run >>> 32);
+                position += copied;
+            }
+            if ((value = scalar()) < 0) break;
+            int width = value == '"' || value == '\\' ? 2 : value < 32 ? 6
                     : value < 0x80 ? 1 : value < 0x800 ? 2 : value < 0x10000 ? 3 : 4;
             if (position > limit - width) {
                 writer.flushString(out, position, target); position = 0; limit = writer.stringLimit(out.length);
                 if (width > limit) throw Hessian2JsonTranscoder.outputBudget();
             }
-            if (number) {
-                if ((numberState == 4 || numberState == 5) && value >= '0' && value <= '9') fractionDigits++;
-                if (numberState == 6 && value == '-') negativeExponent = true;
-                if ((numberState == 6 || numberState == 7 || numberState == 8) && value >= '0' && value <= '9') {
-                    exponent = exponent * 10 + value - '0';
-                    if (exponent > Integer.MAX_VALUE) throw new DubboCodecException("BigDecimal exponent exceeds its integer range");
-                }
-                numberState = numberState(numberState, value);
-                out[position++] = (byte) value;
-                count++;
-            } else if (value == '"' || value == '\\') {
-                out[position++] = '\\'; out[position++] = (byte) value;
-            } else if (value < 32) {
-                out[position++] = '\\'; out[position++] = 'u'; out[position++] = '0'; out[position++] = '0';
-                out[position++] = HEX[value >>> 4]; out[position++] = HEX[value & 15];
-            } else if (value < 0x80) out[position++] = (byte) value;
-            else if (value < 0x800) {
-                out[position++] = (byte) (0xc0 | (value >>> 6)); out[position++] = (byte) (0x80 | (value & 63));
-            } else if (value < 0x10000) {
-                out[position++] = (byte) (0xe0 | (value >>> 12)); out[position++] = (byte) (0x80 | ((value >>> 6) & 63));
-                out[position++] = (byte) (0x80 | (value & 63));
-            } else {
-                out[position++] = (byte) (0xf0 | (value >>> 18)); out[position++] = (byte) (0x80 | ((value >>> 12) & 63));
-                out[position++] = (byte) (0x80 | ((value >>> 6) & 63)); out[position++] = (byte) (0x80 | (value & 63));
-            }
+            position = writeScalar(out, position, value);
         }
-        if (number) {
-            if (count == 0 || numberState != 2 && numberState != 3 && numberState != 5 && numberState != 8) {
-                throw new DubboCodecException("Invalid BigDecimal JSON number");
+        if (position == limit) {
+            writer.flushString(out, position, target); position = 0; limit = writer.stringLimit(out.length);
+            if (limit == 0) throw Hessian2JsonTranscoder.outputBudget();
+        }
+        out[position++] = '"';
+        return position;
+    }
+
+    /** Packed UTF-16-unit / byte counts; never crosses a chunk or output boundary. */
+    private static long jsonUtf8Run(byte[] input, int start, int available, int characters) {
+        int bytes = 0, units = 0;
+        while (bytes < available && units < characters) {
+            int first = input[start + bytes] & 255;
+            int width;
+            if (first >= 0x20 && first < 0x80 && first != '"' && first != '\\') width = 1;
+            else if (first >= 0xc2 && first <= 0xdf) width = 2;
+            else if (first >= 0xe0 && first <= 0xef) width = 3;
+            else if (first >= 0xf0 && first <= 0xf4 && characters - units >= 2) width = 4;
+            else break;
+            if (available - bytes < width) break;
+            if (width > 1) {
+                int second = input[start + bytes + 1] & 255;
+                if ((second & 0xc0) != 0x80) break;
+                if (width == 3 && (first == 0xe0 && second < 0xa0 || first == 0xed && second >= 0xa0)) break;
+                if (width == 4 && (first == 0xf0 && second < 0x90 || first == 0xf4 && second >= 0x90)) break;
+                if (width >= 3 && (input[start + bytes + 2] & 0xc0) != 0x80) break;
+                if (width == 4 && (input[start + bytes + 3] & 0xc0) != 0x80) break;
             }
-            long scale = fractionDigits - (negativeExponent ? -exponent : exponent);
-            if (scale < Integer.MIN_VALUE || scale > Integer.MAX_VALUE) {
-                throw new DubboCodecException("BigDecimal scale exceeds its integer range");
-            }
+            bytes += width;
+            units += width == 4 ? 2 : 1;
+        }
+        return (long) units << 32 | bytes & 0xffffffffL;
+    }
+
+    private static int writeScalar(byte[] out, int position, int value) {
+        if (value == '"' || value == '\\') {
+            out[position++] = '\\'; out[position++] = (byte) value;
+        } else if (value < 32) {
+            out[position++] = '\\'; out[position++] = 'u'; out[position++] = '0'; out[position++] = '0';
+            out[position++] = HEX[value >>> 4]; out[position++] = HEX[value & 15];
+        } else if (value < 0x80) out[position++] = (byte) value;
+        else if (value < 0x800) {
+            out[position++] = (byte) (0xc0 | (value >>> 6)); out[position++] = (byte) (0x80 | (value & 63));
+        } else if (value < 0x10000) {
+            out[position++] = (byte) (0xe0 | (value >>> 12)); out[position++] = (byte) (0x80 | ((value >>> 6) & 63));
+            out[position++] = (byte) (0x80 | (value & 63));
         } else {
+            out[position++] = (byte) (0xf0 | (value >>> 18)); out[position++] = (byte) (0x80 | ((value >>> 12) & 63));
+            out[position++] = (byte) (0x80 | ((value >>> 6) & 63)); out[position++] = (byte) (0x80 | (value & 63));
+        }
+        return position;
+    }
+
+    int writeNumber(byte[] out, int position, OutputStream target, Hessian2JsonTranscoder writer) throws IOException {
+        validateOutput(out, position, target);
+        int limit = writer.stringLimit(out.length);
+        int state = 0, count = 0, fractionDigits = 0;
+        long exponent = 0;
+        boolean negativeExponent = false;
+        int value;
+        while ((value = scalar()) >= 0) {
             if (position == limit) {
                 writer.flushString(out, position, target); position = 0; limit = writer.stringLimit(out.length);
                 if (limit == 0) throw Hessian2JsonTranscoder.outputBudget();
             }
-            out[position++] = '"';
+            if ((state == 4 || state == 5) && value >= '0' && value <= '9') fractionDigits++;
+            if (state == 6 && value == '-') negativeExponent = true;
+            if ((state == 6 || state == 7 || state == 8) && value >= '0' && value <= '9') {
+                exponent = exponent * 10 + value - '0';
+                if (exponent > Integer.MAX_VALUE) throw new DubboCodecException("BigDecimal exponent exceeds its integer range");
+            }
+            state = numberState(state, value);
+            out[position++] = (byte) value;
+            count++;
+        }
+        if (count == 0 || state != 2 && state != 3 && state != 5 && state != 8) {
+            throw new DubboCodecException("Invalid BigDecimal JSON number");
+        }
+        long scale = fractionDigits - (negativeExponent ? -exponent : exponent);
+        if (scale < Integer.MIN_VALUE || scale > Integer.MAX_VALUE) {
+            throw new DubboCodecException("BigDecimal scale exceeds its integer range");
         }
         return position;
+    }
+
+    private static void validateOutput(byte[] out, int position, OutputStream target) {
+        if (out == null || out.length < 8 || position < 0 || position > out.length || target == null) {
+            throw new IllegalArgumentException("JSON string output requires a buffer of at least 8 bytes and a valid position/target");
+        }
     }
 
     private static int numberState(int state, int value) {

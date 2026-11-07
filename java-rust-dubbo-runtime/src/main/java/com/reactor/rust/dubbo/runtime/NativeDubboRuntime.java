@@ -76,6 +76,27 @@ public final class NativeDubboRuntime implements AutoCloseable {
         NativeDubboBridge.registerMethod(clientId, methodId, method, descriptor);
     }
 
+    public void registerScalarMethod(int clientId, int methodId, String method, String descriptor) {
+        ensureOpen();
+        NativeDubboBridge.registerScalarMethod(clientId, methodId, method, descriptor);
+    }
+
+    public void registerIntMethod(int clientId, int methodId, String method, String descriptor) {
+        ensureOpen();
+        NativeDubboBridge.registerIntMethod(clientId, methodId, method, descriptor);
+    }
+
+    /** Releases a partially initialized client without closing other clients in this runtime. */
+    public synchronized void closeClient(int clientId) {
+        for (int index = 0; index < clients.size(); index++) {
+            if (clients.get(index).id() == clientId) {
+                NativeDubboBridge.closeClient(clientId);
+                clients.remove(index);
+                return;
+            }
+        }
+    }
+
     public synchronized boolean clientsReady() {
         ensureOpen();
         for (ClientRegistration client : clients) {

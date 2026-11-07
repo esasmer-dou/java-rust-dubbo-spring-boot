@@ -9,7 +9,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
 
-final class NativeStreamingResultList<E> extends AbstractList<E>
+class NativeStreamingResultList<E> extends AbstractList<E>
         implements DubboStreamingResult<E> {
     private static final String ONE_PASS_ITERATOR_MESSAGE =
             "Dubbo streaming iteration is one-pass; streamingIterator() may be requested only once";
@@ -37,11 +37,19 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
             int declaredSize,
             NativeResponseDecoder<E> decoder,
             Runnable releaseAction) {
+        this(input, declaredSize, decoder, new LeakGuard(Objects.requireNonNull(releaseAction, "releaseAction")));
+    }
+
+    NativeStreamingResultList(
+            Hessian2Input input,
+            int declaredSize,
+            NativeResponseDecoder<E> decoder,
+            LeakGuard lease) {
         this.input = Objects.requireNonNull(input, "input");
         this.decoder = Objects.requireNonNull(decoder, "decoder");
         this.declaredSize = declaredSize;
         // The production action owns only the native response, never this list or its decoder.
-        this.leakGuard = new LeakGuard(Objects.requireNonNull(releaseAction, "releaseAction"));
+        this.leakGuard = Objects.requireNonNull(lease, "lease");
         this.cleanable = Cleanup.CLEANER.register(this, leakGuard);
         try {
             input.completeReference(input.referenceCount() - 1, this);
@@ -226,16 +234,17 @@ final class NativeStreamingResultList<E> extends AbstractList<E>
         private static final LongAdder LEAKED_RESULTS = new LongAdder();
     }
 
-    private static final class LeakGuard implements Runnable {
-        private final AtomicBoolean released = new AtomicBoolean();
+    // Shared with direct-result opening so failure cleanup and Cleaner use the same guard.
+    static final class LeakGuard extends AtomicBoolean implements Runnable {
+        private static final long serialVersionUID = 1L;
         private Runnable action;
 
-        private LeakGuard(Runnable action) {
-            this.action = action;
+        LeakGuard(Runnable action) {
+            this.action = Objects.requireNonNull(action, "action");
         }
 
-        private void release(boolean leaked) {
-            if (released.compareAndSet(false, true)) {
+        void release(boolean leaked) {
+            if (compareAndSet(false, true)) {
                 Runnable current = action;
                 action = null;
                 if (leaked) LeakCounters.LEAKED_RESULTS.increment();

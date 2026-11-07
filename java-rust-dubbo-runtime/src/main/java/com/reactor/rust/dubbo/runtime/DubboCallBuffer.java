@@ -29,7 +29,7 @@ public final class DubboCallBuffer implements AutoCloseable {
 
     public Hessian2Input responseInput(NativeResponse response, int maxCollectionItems) {
         ensureLeased();
-        input.attach(response.body(), response.body().capacity(), maxCollectionItems);
+        response.attachTo(input, maxCollectionItems);
         return input;
     }
 

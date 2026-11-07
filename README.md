@@ -4,7 +4,43 @@
 
 A reflection-free Dubbo consumer and provider for Spring Boot 3. Java keeps the business logic. A small Rust native data plane handles TCP connections, Dubbo framing, timeouts, heartbeats, backpressure, and provider I/O.
 
-The public package contains the Java API and verified Windows, Linux, and Apple Silicon macOS native artifacts. Rust source is maintained in a separate private repository.
+The public package contains the supported Java API and Windows, Linux, and Apple Silicon macOS native artifacts. Rust source is maintained in a separate private repository.
+
+## 0.8.2 Distribution Candidate
+
+Prepared November 7, 2026; not published. The latest verified stable release remains
+`0.8.1`. Current-source correctness with the fresh native artifacts is pending on
+EmaTech. Native build success alone is not runtime qualification.
+
+Align the processor, enhancer, runtime, adapter and native JARs to `0.8.2`, then
+regenerate clients. The codec now supports standard Hessian `char`/`Character`
+strings, including typed direct JSON fields. Readers also accept earlier generated
+integer characters in `0..65535`; upgrade integer-only readers before new writers.
+Schema-less `Object` values retain Hessian String semantics, not Character typing.
+
+Native request encoding is opt-in at compilation with
+`-Areactor.dubbo.nativeArguments=true`. The default is `false`; leaving it unset
+preserves generated Java Hessian request encoding. This is not a runtime property.
+With the option enabled, supported scalar, String and byte-array arguments use
+native encoding; DTO/collection arguments keep generated Java encoding, and
+zero-argument calls keep their precomputed request path. A synchronous direct-JSON
+list method with exactly one primitive `int` can also avoid the Java request buffer.
+Use the matching native JAR: an older ABI-3 binary can lack the additive exports.
+Missing exports fail explicitly, without hidden fallback or RPC replay. JNI remains
+the primary bridge; existing signatures and Spring Dubbo ABI `3` are unchanged.
+
+Direct JSON results remain one-pass owned resources. Close abandoned results;
+capacity retries retain the same response and never repeat the business call.
+Java executes business logic on every request with guards intact. No response
+cache or native health bypass is added.
+
+P05 acceptance covers only the measured Dubbo workloads. The full HTTP matrix
+remains **13/15, not PASS**. **R-P05-HTTP-001** remains open: small HTTP control-route
+RPS/p99 regressions have no established product root cause. This is not whole-plan,
+all-default, all-endpoint or all-platform performance qualification. Disabling
+native arguments alone does not establish equivalence to the measured configuration.
+
+[Candidate release notes](RELEASE_NOTES.md)
 
 ## Contents
 
@@ -45,10 +81,10 @@ Use this library when provider addresses are static or available through Kuberne
 ## Consumer Method And Reference Timeouts: 0.8.1 (2026-10-30)
 
 Version `0.8.1` adds generated consumer method and reference timeouts; these are not
-part of `0.8.0`. Rebuild generated clients with the `0.8.1` annotation processor,
+part of `0.8.0`. Rebuild generated clients with the matching annotation processor,
 enhancer and runtime. Existing generated clients retain their protected runtime
 overloads, which delegate with a zero method override and preserve inherited timeouts.
-Native ABI `3`, native binary bytes and provider timeout behavior are unchanged.
+In that release, native ABI `3`, binary bytes and provider timeout behavior were unchanged.
 
 [Release notes](RELEASE_NOTES.md) | [Turkish release notes](RELEASE_NOTES.tr.md)
 
@@ -102,13 +138,13 @@ Old generated clients keep their existing runtime entry points.
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Release version: `0.8.1` (2026-10-30).
+Distribution candidate: `0.8.2` (2026-11-07), pending correctness qualification and publication.
 
 ### 0.8.0: Forward Typed Results Without Consumer Row DTOs
 
 Use `@DubboStreamed(directJson = true)` when the consumer only forwards a result to HTTP. Generated codecs write typed native values as JSON fields without constructing consumer row DTOs. Use ordinary typed decoding when Java must validate or transform rows.
 
-For Rust-Java REST, add the optional `java-rust-dubbo-rest-adapter:0.8.0`. `DubboJsonResponses.body(result)` uses the existing bounded response protocol. Return that body from the handler to transfer ownership to HTTP. Close it if it will not be submitted. Do not pass an ordinary list: there is no hidden DTO fallback.
+For Rust-Java REST, add the optional `java-rust-dubbo-rest-adapter:0.8.2`. `DubboJsonResponses.body(result)` uses the existing bounded response protocol. Return that body from the handler to transfer ownership to HTTP. Close it if it will not be submitted. Do not pass an ordinary list: there is no hidden DTO fallback.
 
 Consumption is one-pass. A second attempt fails explicitly. Native ownership ends on completion or cancellation. Use REST 4.8.0 and matching native binaries. Spring applications do not need this REST adapter.
 
@@ -156,7 +192,7 @@ by a network timeout. Keep JDBC deadlines and idempotency explicit. Native respo
 admission permit remain owned until the Java operation actually completes. Writes are never replayed.
 Set a compatible timeout on the consumer as well.
 
-Use the matching `0.8.0` DLL/SO/dylib for method deadlines. Native ABI stays `3`; new entry points
+Use the matching `0.8.2` DLL/SO/dylib for this candidate. Native ABI stays `3`; new entry points
 are additive. For optional provider telemetry, use the published
 [Glowroot `0.7.1` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.1):
 `java-rust-glowroot-spring-native-dubbo-adapter:0.7.1`. Keep all agent modules on 0.7.1.
@@ -241,7 +277,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.8.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.8.2</java-rust-dubbo.version>
 </properties>
 
 <repositories>

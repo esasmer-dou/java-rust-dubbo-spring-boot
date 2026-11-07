@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.2 Candidate - 2026-11-07
+
+- Align supported production modules and freshly rebuilt Windows x64, Linux x64
+  and macOS ARM64 natives to 0.8.2; preserve JNI ABI 3 and existing signatures.
+- Update generated codec/direct JSON ownership and standard character handling.
+  Keep native request arguments opt-in with a default of false.
+- Limit P05 acceptance to measured Dubbo workloads. Full HTTP remains 13/15,
+  not PASS; R-P05-HTTP-001 remains open without a proven product root cause.
+- Native compilation is complete; current-source EmaTech correctness and publication
+  authorization remain pending. No all-default or whole-plan performance claim.
+
 ## 0.8.1 - 2026-10-30
 
 - Generate consumer wait budgets for interface `@DubboMethod(timeoutMs=...)` and field

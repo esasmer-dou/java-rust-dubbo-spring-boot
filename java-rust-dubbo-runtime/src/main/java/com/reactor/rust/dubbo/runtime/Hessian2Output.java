@@ -131,6 +131,22 @@ public final class Hessian2Output {
         }
     }
 
+    /** Single-unit Hessian string without allocating a temporary Java String. */
+    public void writeChar(char value) {
+        ensure(4);
+        buffer.put((byte) 1);
+        if (value < 0x80) {
+            buffer.put((byte) value);
+        } else if (value < 0x800) {
+            buffer.put((byte) (0xc0 | (value >> 6)));
+            buffer.put((byte) (0x80 | (value & 0x3f)));
+        } else {
+            buffer.put((byte) (0xe0 | (value >> 12)));
+            buffer.put((byte) (0x80 | ((value >> 6) & 0x3f)));
+            buffer.put((byte) (0x80 | (value & 0x3f)));
+        }
+    }
+
     public void writeString(String value) {
         if (value == null) {
             writeNull();
@@ -235,7 +251,7 @@ public final class Hessian2Output {
             return;
         }
         writeObjectStart(BIG_DECIMAL, VALUE_FIELD);
-        writeString(value.toPlainString());
+        writeString(value.toString());
     }
 
     public void writeDate(Date value) {
@@ -318,7 +334,7 @@ public final class Hessian2Output {
         } else if (value instanceof Double current) {
             writeDouble(current);
         } else if (value instanceof Character current) {
-            writeInt(current);
+            writeChar(current);
         } else if (value instanceof String current) {
             writeString(current);
         } else if (value instanceof byte[] current) {
@@ -371,6 +387,34 @@ public final class Hessian2Output {
             throw new DubboCodecException("Unsupported dynamic Dubbo value type: "
                     + value.getClass().getName());
         }
+    }
+
+    /** Fixed-width slots for the opt-in generated native argument plan, not Hessian wire bytes. */
+    public boolean writeNativePresent(boolean present) {
+        put((byte) (present ? 1 : 0));
+        return present;
+    }
+
+    public void writeNativeBoolean(boolean value) { put((byte) (value ? 1 : 0)); }
+    public void writeNativeByte(byte value) { put(value); }
+    public void writeNativeShort(short value) { ensure(2); buffer.putShort(value); }
+    public void writeNativeInt(int value) { ensure(4); buffer.putInt(value); }
+    public void writeNativeLong(long value) { ensure(8); buffer.putLong(value); }
+    public void writeNativeChar(char value) { ensure(2); buffer.putChar(value); }
+    public void writeNativeFloat(float value) { ensure(4); buffer.putFloat(value); }
+    public void writeNativeDouble(double value) { ensure(8); buffer.putDouble(value); }
+
+    public void writeNativeString(String value) {
+        if (value == null) { writeNativeInt(-1); return; }
+        ensure(Math.addExact(4, Math.multiplyExact(value.length(), 2)));
+        buffer.putInt(value.length());
+        for (int index = 0; index < value.length(); index++) buffer.putChar(value.charAt(index));
+    }
+
+    public void writeNativeBinary(byte[] value) {
+        if (value == null) { writeNativeInt(-1); return; }
+        ensure(Math.addExact(4, value.length));
+        buffer.putInt(value.length).put(value);
     }
 
     private void writeStringChunk(String value, int start, int chars, boolean last) {

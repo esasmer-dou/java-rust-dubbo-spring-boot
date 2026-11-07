@@ -3,7 +3,6 @@ package com.reactor.rust.dubbo.runtime;
 import java.io.OutputStream;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /** One lazy, immutable-capacity pool. Admission never waits for another writer. */
 final class DirectJsonWriterPool {
@@ -15,8 +14,8 @@ final class DirectJsonWriterPool {
     static final String OUTPUT_ENVIRONMENT = "REACTOR_DUBBO_DIRECT_JSON_MAX_OUTPUT_BYTES";
     static final long DEFAULT_BYTES = 32L * 1024 * 1024, MAX_BYTES = 64L * 1024 * 1024;
     private static volatile DirectJsonWriterPool global;
+    private static final OutputStream ROOT_PROBE_OUTPUT = OutputStream.nullOutputStream();
     private final Hessian2JsonTranscoder[] writers;
-    private final AtomicReferenceArray<Thread> owners;
     private final AtomicInteger available;
     final long scanLimit, outputLimit;
     private final String rejectionMessage;
@@ -29,7 +28,6 @@ final class DirectJsonWriterPool {
         this.outputLimit = outputLimit;
         rejectionMessage = "Direct JSON writer pool is full (slots=" + slots + ')';
         writers = new Hessian2JsonTranscoder[slots];
-        owners = new AtomicReferenceArray<>(slots);
         available = new AtomicInteger(slots == 32 ? -1 : (1 << slots) - 1);
         for (int index = 0; index < slots; index++) writers[index] = new Hessian2JsonTranscoder(this, index);
     }
@@ -69,19 +67,7 @@ final class DirectJsonWriterPool {
     Hessian2JsonTranscoder acquire(Hessian2Input input, OutputStream target) {
         java.util.Objects.requireNonNull(input, "input");
         java.util.Objects.requireNonNull(target, "target");
-        Thread thread = Thread.currentThread();
-        for (int index = 0; index < writers.length; index++) {
-            if (owners.get(index) == thread) throw new IllegalStateException("Direct JSON output is not reentrant on the same thread");
-        }
-        int free, bit;
-        do {
-            free = available.get();
-            if (free == 0) throw new PoolExhausted(rejectionMessage);
-            bit = Integer.lowestOneBit(free);
-        } while (!available.compareAndSet(free, free & ~bit));
-        int index = Integer.numberOfTrailingZeros(bit);
-        owners.set(index, thread);
-        Hessian2JsonTranscoder writer = writers[index];
+        Hessian2JsonTranscoder writer = writers[claim()];
         try {
             writer.attach(input, target);
             return writer;
@@ -94,21 +80,67 @@ final class DirectJsonWriterPool {
         }
     }
 
-    boolean ownedByCaller(int slot) { return owners.get(slot) == Thread.currentThread(); }
+    Hessian2JsonInput.Root readRoot(Hessian2Input input) {
+        java.util.Objects.requireNonNull(input, "input");
+        int slot = claim();
+        Hessian2JsonTranscoder writer = writers[slot];
+        boolean attached = false;
+        Throwable failure = null;
+        try {
+            // Keep admission, but don't attach/reset the output context just to read an untyped header.
+            Hessian2JsonInput.Root root = Hessian2JsonInput.readUntypedRoot(input, scanLimit);
+            if (root != null) return root;
+            attached = true;
+            writer.attach(input, ROOT_PROBE_OUTPUT);
+            return writer.input(input).readRoot();
+        } catch (RuntimeException | Error error) {
+            failure = error;
+            throw error;
+        } finally {
+            if (!attached) release(slot);
+            else {
+                try { writer.detach(); }
+                catch (RuntimeException | Error cleanupFailure) {
+                    if (failure == null) throw cleanupFailure;
+                    if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+                }
+            }
+        }
+    }
+
+    private int claim() {
+        Thread thread = Thread.currentThread();
+        // This caller's reserved slot stays occupied until it clears its owner and releases it.
+        int occupied = ~available.get() & (-1 >>> (32 - writers.length));
+        while (occupied != 0) {
+            int slot = Integer.numberOfTrailingZeros(occupied);
+            if (writers[slot].owner == thread) throw new IllegalStateException("Direct JSON output is not reentrant on the same thread");
+            occupied &= occupied - 1;
+        }
+        int free, bit;
+        do {
+            free = available.get();
+            if (free == 0) throw new PoolExhausted(rejectionMessage);
+            bit = Integer.lowestOneBit(free);
+        } while (!available.compareAndSet(free, free & ~bit));
+        int index = Integer.numberOfTrailingZeros(bit);
+        writers[index].owner = thread;
+        return index;
+    }
 
     void release(int slot) {
-        owners.set(slot, null);
+        writers[slot].owner = null;
         int previous, bit = 1 << slot;
         do { previous = available.get(); } while (!available.compareAndSet(previous, previous | bit));
     }
 
     int capacity() { return writers.length; }
     int active() { return writers.length - Integer.bitCount(available.get()); }
-    long payloadCapacity() { return (long) writers.length * 65536; }
+    long payloadCapacity() { return (long) writers.length * (65536 + Hessian2JsonCursor.CAPACITY); }
     boolean idleAndDetached() {
         if (active() != 0) return false;
         for (int index = 0; index < writers.length; index++) {
-            if (owners.get(index) != null || !writers[index].detached()) return false;
+            if (writers[index].owner != null || !writers[index].detached()) return false;
         }
         return true;
     }

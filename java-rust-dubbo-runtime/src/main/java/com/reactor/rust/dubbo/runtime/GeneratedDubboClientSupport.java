@@ -111,9 +111,25 @@ public abstract class GeneratedDubboClientSupport {
             NativeResponseDecoder<E> itemDecoder, Hessian2JsonWriter itemWriter) {
         NativeResponsePolicy.requireCurrent();
         NativeResponse response = invoke(methodId, call, methodTimeoutMs);
-        Hessian2Input input = new Hessian2Input();
+        return directJsonList(response, itemDecoder, itemWriter);
+    }
+
+    /** The native method encodes the primitive without borrowing a Java request buffer. */
+    protected final <E> List<E> invokeIntDirectJsonList(
+            int methodId, int value, int methodTimeoutMs,
+            NativeResponseDecoder<E> itemDecoder, Hessian2JsonWriter itemWriter) {
+        int timeout = effectiveTimeout(methodTimeoutMs, timeoutMs);
+        NativeResponsePolicy.requireCurrent();
+        NativeResponse response = NativeDubboBridge.invokeInt(clientId, methodId, value, timeout);
+        return directJsonList(response, itemDecoder, itemWriter);
+    }
+
+    private <E> List<E> directJsonList(NativeResponse response,
+            NativeResponseDecoder<E> itemDecoder, Hessian2JsonWriter itemWriter) {
+        Hessian2Input input = null;
         boolean transferred = false;
         try {
+            input = new Hessian2Input();
             responseInput(response, input);
             int flag = requireValueResponse(input);
             if (isNullResponse(flag) || input.readNull()) return null;
@@ -123,7 +139,7 @@ public abstract class GeneratedDubboClientSupport {
             return result;
         } finally {
             if (!transferred) {
-                try { input.detach(); } finally { response.close(); }
+                try { if (input != null) input.detach(); } finally { response.close(); }
             }
         }
     }
@@ -168,8 +184,8 @@ public abstract class GeneratedDubboClientSupport {
     }
 
     private Hessian2Input responseInput(NativeResponse response, Hessian2Input input) {
+        response.attachTo(input, maxCollectionItems);
         if (response.status() != 20) {
-            input.attach(response.body(), response.body().capacity(), maxCollectionItems);
             String message;
             try {
                 message = input.readString();
@@ -178,7 +194,6 @@ public abstract class GeneratedDubboClientSupport {
             }
             throw new DubboNativeException(message);
         }
-        input.attach(response.body(), response.body().capacity(), maxCollectionItems);
         return input;
     }
 

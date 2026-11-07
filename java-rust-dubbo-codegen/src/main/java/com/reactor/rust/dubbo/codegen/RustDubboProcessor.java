@@ -28,6 +28,7 @@ import javax.tools.StandardLocation;
 public final class RustDubboProcessor extends AbstractProcessor {
     static final String APACHE_COMPATIBILITY_OPTION = "reactor.dubbo.apacheCompatibility";
     static final String FRAMEWORK_OPTION = "reactor.dubbo.framework";
+    static final String NATIVE_ARGUMENTS_OPTION = "reactor.dubbo.nativeArguments";
     private static final String REFERENCE = "com.reactor.rust.dubbo.annotation.DubboReference";
     private static final String SERVICE = "com.reactor.rust.dubbo.annotation.DubboService";
     private static final String ENABLE = "com.reactor.rust.dubbo.annotation.EnableDubbo";
@@ -50,7 +51,7 @@ public final class RustDubboProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedOptions() {
-        return Set.of(APACHE_COMPATIBILITY_OPTION, FRAMEWORK_OPTION);
+        return Set.of(APACHE_COMPATIBILITY_OPTION, FRAMEWORK_OPTION, NATIVE_ARGUMENTS_OPTION);
     }
 
     @Override
@@ -64,6 +65,13 @@ public final class RustDubboProcessor extends AbstractProcessor {
         if (!framework.equals("spring") && !framework.equals("plain")) {
             if (!written) processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
                     "reactor.dubbo.framework must be spring or plain");
+            written = true;
+            return false;
+        }
+        String nativeArguments = processingEnv.getOptions().getOrDefault(NATIVE_ARGUMENTS_OPTION, "false");
+        if (!nativeArguments.equals("true") && !nativeArguments.equals("false")) {
+            if (!written) processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "reactor.dubbo.nativeArguments must be true or false");
             written = true;
             return false;
         }

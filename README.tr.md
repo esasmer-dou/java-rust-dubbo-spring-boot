@@ -4,7 +4,44 @@
 
 Spring Boot 3 için reflection kullanmayan bir Dubbo consumer ve provider kütüphanesidir. İş mantığı Java'da kalır. Küçük bir Rust native veri düzlemi; TCP bağlantılarını, Dubbo paketlerini, zaman aşımlarını, heartbeat işlemlerini, backpressure kontrolünü ve provider iletişimini yönetir.
 
-Public paket, Java API'sini ve doğrulanmış Windows, Linux ve Apple Silicon macOS native artifact'larını içerir. Rust kaynak kodu ayrı bir private repoda tutulur.
+Public paket, desteklenen Java API'sini ve Windows, Linux ve Apple Silicon macOS native artifact'larını içerir. Rust kaynak kodu ayrı bir private repoda tutulur.
+
+## 0.8.2 Dağıtım Adayı
+
+Hazırlık: 7 Kasım 2026; henüz yayımlanmadı. Son doğrulanmış stable sürüm `0.8.1`
+olarak kalır. Güncel kaynağın yeni native dosyalarla doğruluk kontrolü EmaTech
+üzerinde bekleniyor. Native build başarısı tek başına runtime kabulü değildir.
+
+Processor, enhancer, runtime, adaptör ve native JAR'ları `0.8.2` sürümüne hizalayın;
+istemcileri yeniden üretin. Codec artık `char`/`Character` için standart Hessian
+metin biçimini ve tipli direct JSON alanlarını destekler. Okuyucu eski üretilmiş
+`0..65535` tamsayı karakterlerini de kabul eder. Yeni yazıcıdan önce eski, yalnız
+tamsayı okuyan istemcileri güncelleyin. Şemasız `Object`, Character tipi değil
+Hessian String semantiği taşır.
+
+Native istek kodlaması derleme sırasında
+`-Areactor.dubbo.nativeArguments=true` ile açılır. Varsayılan `false` kalır;
+seçenek verilmezse üretilmiş Java Hessian istek kodlaması korunur. Runtime ayarı
+değildir. Açıldığında desteklenen scalar, String ve byte-array argümanları native
+kodlamayı kullanır. DTO/koleksiyonlar Java kodlamasını; sıfır argümanlı çağrılar
+önceden hazırlanmış istek yolunu korur. Tek primitive `int` alan senkron direct-JSON
+liste metodunda Java istek buffer'ı da atlanabilir. Eşleşen native JAR zorunludur;
+eski ABI-3 dosyasında ek export'lar bulunmayabilir. Eksik export açık hata verir;
+gizli fallback veya RPC tekrarı yoktur. JNI birincildir; mevcut imzalar ve Spring
+Dubbo ABI `3` değişmez.
+
+Direct JSON sonucu tek geçişli, sahipliği açık bir kaynaktır. Gönderilmeyen sonucu
+kapatın. Kapasite nedeniyle tekrar yazım aynı yanıtı tutar; iş çağrısını tekrarlamaz.
+Guard'lar korunur ve iş mantığı her istekte Java üzerinde çalışır. Yanıt önbelleği
+veya native health bypass eklenmez.
+
+P05 kabulü yalnız ölçülen Dubbo iş yüklerini kapsar. Tam HTTP matrisi **13/15;
+PASS değildir**. **R-P05-HTTP-001** açıktır: küçük HTTP kontrol rotasında RPS/p99
+gerilemesi vardır; ürün kök nedeni kanıtlanmamıştır. Tüm plan, varsayılanlar,
+endpoint'ler veya platformlar için performans kabulü değildir. Native argümanları
+kapatmak tek başına ölçülen yapılandırmayla eşdeğerlik kanıtlamaz.
+
+[Aday sürüm notları](RELEASE_NOTES.tr.md)
 
 ## İçindekiler
 
@@ -45,10 +82,10 @@ Provider adresleri sabitse veya Kubernetes Service DNS üzerinden erişilebiliyo
 ## Consumer Metot Ve Reference Zaman Aşımı: 0.8.1 (2026-10-30)
 
 `0.8.1`, üretilmiş consumer istemcilerine metot ve reference zaman aşımı desteği
-ekler; bu özellik `0.8.0` paketinde bulunmaz. İstemcileri `0.8.1` annotation processor,
+ekler; bu özellik `0.8.0` paketinde bulunmaz. İstemcileri eşleşen annotation processor,
 enhancer ve runtime ile yeniden derleyin. Eski üretilmiş istemcilerin protected
 runtime overload'ları korunur; sıfır metot override'ı ile delege ederek miras alınan
-zaman aşımını kullanırlar. Native ABI `3`, native dosya baytları ve provider davranışı değişmez.
+zaman aşımını kullanırlar. O sürümde native ABI `3`, native dosya baytları ve provider davranışı değişmedi.
 
 [Sürüm notları](RELEASE_NOTES.tr.md) | [İngilizce sürüm notları](RELEASE_NOTES.md)
 
@@ -103,13 +140,13 @@ Eski üretilmiş istemcilerin runtime girişleri korunur.
 - Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Sürüm: `0.8.1` (2026-10-30).
+Dağıtım adayı: `0.8.2` (2026-11-07); doğruluk kabulü ve yayın bekleniyor.
 
 ### 0.8.0: Tipli Sonucu DTO Oluşturmadan Aktarın
 
 Sadece veriyi HTTP yanıtına aktaracaksanız `@DubboStreamed(directJson = true)` kullanın. Üretilen codec, native sonucu JSON alanlarına aktarır. Consumer tarafında her satır için DTO oluşturulmaz. Java satırları doğrulayacak veya değiştirecekse normal tipli sonucu kullanın.
 
-Rust-Java REST için isteğe bağlı `java-rust-dubbo-rest-adapter:0.8.0` ekleyin. `DubboJsonResponses.body(result)` mevcut sınırlı response protokolünü kullanır. Handler bu sonucu döndürür; sahiplik HTTP yanıtına geçer. Sonucu göndermeyecekseniz kapatın. Normal listeyi bu adaptöre vermeyin. Gizli DTO fallback yoktur.
+Rust-Java REST için isteğe bağlı `java-rust-dubbo-rest-adapter:0.8.2` ekleyin. `DubboJsonResponses.body(result)` mevcut sınırlı response protokolünü kullanır. Handler bu sonucu döndürür; sahiplik HTTP yanıtına geçer. Sonucu göndermeyecekseniz kapatın. Normal listeyi bu adaptöre vermeyin. Gizli DTO fallback yoktur.
 
 Akış tek geçişlidir. İkinci tüketim açık hata verir. Native yanıt, yazma tamamlandığında veya iptal edildiğinde bırakılır. REST 4.8.0 ve eşleşen native dosyaları kullanın. Spring uygulaması bu REST adaptörüne ihtiyaç duymaz.
 
@@ -156,7 +193,7 @@ Kuyrukta süresi dolan iş başlatılmaz. Başlamış DB işlemi ağ timeout'u i
 JDBC timeout'unu ve idempotency kuralını ayrıca belirleyin. Java tamamlanana kadar native cevap belleği
 ve concurrency izni korunur. Yazma işlemi kendiliğinden tekrarlanmaz. Consumer timeout'unu da ayarlayın.
 
-Metot timeout'u için aynı sürümün `0.8.0` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
+Bu aday için eşleşen `0.8.2` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
 Yeni girişler mevcut API'ye eklenir. İsteğe bağlı provider ölçümü için yayımlanmış
 [Glowroot `0.7.1` adaptörünü](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.1) kullanın:
 `java-rust-glowroot-spring-native-dubbo-adapter:0.7.1`. Tüm agent modüllerini aynı sürümde tutun.
@@ -241,7 +278,7 @@ Repository, starter, code generator, tek bir native platform artifact'ı ve buil
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.8.1</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.8.2</java-rust-dubbo.version>
 </properties>
 
 <repositories>

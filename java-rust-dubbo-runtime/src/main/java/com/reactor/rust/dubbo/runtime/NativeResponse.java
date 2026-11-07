@@ -10,7 +10,8 @@ public final class NativeResponse implements AutoCloseable {
     NativeResponse(long handle, int status, ByteBuffer body) {
         this.handle = handle;
         this.status = status;
-        this.body = body.asReadOnlyBuffer();
+        // JNI transfers this private buffer descriptor; only borrowed read-only views escape.
+        this.body = body;
     }
 
     public int status() {
@@ -19,7 +20,13 @@ public final class NativeResponse implements AutoCloseable {
 
     public ByteBuffer body() {
         ensureOpen();
-        return body.duplicate();
+        return body.asReadOnlyBuffer();
+    }
+
+    void attachTo(Hessian2Input input, int maxCollectionItems) {
+        ensureOpen();
+        // Hessian2Input creates its own cursor; intermediate public views are unnecessary.
+        input.attachReadOnly(body, body.capacity(), maxCollectionItems);
     }
 
     @Override

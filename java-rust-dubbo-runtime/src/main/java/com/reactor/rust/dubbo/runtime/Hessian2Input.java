@@ -28,19 +28,33 @@ public final class Hessian2Input {
     private static final String[] TIME_FIELDS = {"hour", "minute", "second", "nano"};
     private static final String[] DATE_TIME_FIELDS = {"date", "time"};
     private static final Object UNRESOLVED_REFERENCE = new Object();
+    private static final String[] NO_CLASS_TYPES = new String[0];
+    private static final String[][] NO_CLASS_FIELDS = new String[0][];
 
     private ByteBuffer buffer;
-    private String[] classTypes = new String[8];
-    private String[][] classFields = new String[8][];
+    // Direct JSON owns separate class tables; ordinary decoding creates these on demand.
+    private String[] classTypes = NO_CLASS_TYPES;
+    private String[][] classFields = NO_CLASS_FIELDS;
     private int classCount;
-    private List<String> types = new ArrayList<>(4);
-    private List<Object> references = new ArrayList<>(16);
+    private List<String> types;
+    private List<Object> references;
+    // Direct JSON needs only the root; ordinary decoding allocates overflow slots on demand.
+    private Object firstReference;
+    private int referenceSize;
     private int streamingReferencePrefix = -1;
     private int discardedReferences;
     private boolean oversizedReferenceWindow;
     private int maxCollectionItems = 100_000;
 
     public void attach(ByteBuffer source, int length, int collectionLimit) {
+        attach(source, length, collectionLimit, false);
+    }
+
+    void attachReadOnly(ByteBuffer source, int length, int collectionLimit) {
+        attach(source, length, collectionLimit, true);
+    }
+
+    private void attach(ByteBuffer source, int length, int collectionLimit, boolean readOnly) {
         if (source == null || !source.isDirect()) {
             throw new IllegalArgumentException("Hessian input requires a direct ByteBuffer");
         }
@@ -48,7 +62,7 @@ public final class Hessian2Input {
             throw new IllegalArgumentException("Invalid Hessian input length " + length);
         }
         clearSessionState();
-        buffer = source.duplicate().order(ByteOrder.BIG_ENDIAN);
+        buffer = (readOnly ? source.asReadOnlyBuffer() : source.duplicate()).order(ByteOrder.BIG_ENDIAN);
         buffer.clear().limit(length);
         maxCollectionItems = collectionLimit;
     }
@@ -529,32 +543,40 @@ public final class Hessian2Input {
 
     private int reserveReference() {
         int index = referenceCount();
-        references.add(UNRESOLVED_REFERENCE);
+        if (referenceSize == 0) {
+            firstReference = UNRESOLVED_REFERENCE;
+        } else {
+            if (references == null) references = new ArrayList<>(16);
+            references.add(UNRESOLVED_REFERENCE);
+        }
+        referenceSize++;
         return index;
     }
 
     /** Index of the next reference-bearing value, before reading its header. */
     public int referenceCount() {
-        return references.size() + discardedReferences;
+        return referenceSize + discardedReferences;
     }
 
     void beginStreamingReferenceWindow() {
-        streamingReferencePrefix = references.size();
+        streamingReferencePrefix = referenceSize;
     }
 
     void discardConsumedStreamingReferences() {
         if (streamingReferencePrefix < 0) return;
-        int size = references.size();
+        int size = referenceSize;
         int consumed = size - streamingReferencePrefix;
         if (consumed == 0) return;
         oversizedReferenceWindow |= size > 1_024;
         for (int index = size - 1; index >= streamingReferencePrefix; index--) {
-            references.remove(index);
+            if (index == 0) firstReference = null;
+            else references.remove(index - 1);
         }
+        referenceSize = streamingReferencePrefix;
         discardedReferences += consumed;
     }
 
-    int retainedReferenceCount() { return references.size(); }
+    int retainedReferenceCount() { return referenceSize; }
 
     private int referenceOffset(int index) {
         if (streamingReferencePrefix >= 0 && index >= streamingReferencePrefix) {
@@ -577,10 +599,10 @@ public final class Hessian2Input {
         if (tag != 'Q') throw unexpected("reference", tag);
         int index = readInt();
         index = referenceOffset(index);
-        if (index < 0 || index >= references.size()) {
+        if (index < 0 || index >= referenceSize) {
             throw new DubboCodecException("Invalid Hessian object reference " + index);
         }
-        Object value = references.get(index);
+        Object value = index == 0 ? firstReference : references.get(index - 1);
         if (value == UNRESOLVED_REFERENCE) {
             throw new DubboCodecException("Unresolved Hessian reference " + index
                     + "; a cyclic immutable value cannot be decoded before construction");
@@ -590,10 +612,11 @@ public final class Hessian2Input {
 
     public <T> T completeReference(int index, T value) {
         index = referenceOffset(index);
-        if (index < 0 || index >= references.size()) {
+        if (index < 0 || index >= referenceSize) {
             throw new DubboCodecException("Invalid Hessian reference slot " + index);
         }
-        references.set(index, value);
+        if (index == 0) firstReference = value;
+        else references.set(index - 1, value);
         return value;
     }
 
@@ -625,25 +648,25 @@ public final class Hessian2Input {
 
     private void clearSessionState() {
         if (classTypes.length > 64) {
-            classTypes = new String[8];
-            classFields = new String[8][];
+            classTypes = NO_CLASS_TYPES;
+            classFields = NO_CLASS_FIELDS;
         } else {
             Arrays.fill(classTypes, 0, classCount, null);
             Arrays.fill(classFields, 0, classCount, null);
         }
         classCount = 0;
 
-        int typeCount = types.size();
-        types.clear();
-        if (typeCount > 64) {
-            types = new ArrayList<>(4);
+        if (types != null) {
+            if (types.size() > 64) types = null;
+            else types.clear();
         }
 
-        int referenceCount = references.size();
-        references.clear();
-        if (referenceCount > 1_024 || oversizedReferenceWindow) {
-            references = new ArrayList<>(16);
+        if (references != null) {
+            if (referenceSize > 1_024 || oversizedReferenceWindow) references = null;
+            else references.clear();
         }
+        firstReference = null;
+        referenceSize = 0;
         streamingReferencePrefix = -1;
         discardedReferences = 0;
         oversizedReferenceWindow = false;
@@ -717,7 +740,12 @@ public final class Hessian2Input {
         for (int index = 0; index < fieldCount; index++) {
             fields[index] = readString();
         }
-        if (classCount == classTypes.length) {
+        if (classTypes.length == 0) {
+            String[] newTypes = new String[8];
+            String[][] newFields = new String[8][];
+            classTypes = newTypes;
+            classFields = newFields;
+        } else if (classCount == classTypes.length) {
             classTypes = Arrays.copyOf(classTypes, classCount * 2);
             classFields = Arrays.copyOf(classFields, classCount * 2);
         }
@@ -731,11 +759,11 @@ public final class Hessian2Input {
         int unsigned = tag & 0xff;
         if (unsigned <= 0x1f || unsigned >= 0x30 && unsigned <= 0x33
                 || tag == 'R' || tag == 'S') {
-            types.add(readString());
+            registerType(readString());
             return;
         }
         int index = readInt();
-        if (index < 0 || index >= types.size()) {
+        if (types == null || index < 0 || index >= types.size()) {
             throw new DubboCodecException("Invalid Hessian type reference " + index);
         }
     }
@@ -787,7 +815,79 @@ public final class Hessian2Input {
     int jsonCollectionLimit() { return maxCollectionItems; }
 
     void jsonListRoot(String typeName) {
-        if (typeName != null) types.add(typeName);
+        if (typeName != null) registerType(typeName);
         reserveReference();
+    }
+
+    private void registerType(String typeName) {
+        if (types == null) types = new ArrayList<>(4);
+        types.add(typeName);
+    }
+
+    /** Hessian encodes a Java char as one UTF-16 string unit, not an integer. */
+    public char readChar() {
+        int tag = unsigned(peek());
+        if (!(tag <= 0x1f || tag >= 0x30 && tag <= 0x33 || tag == 'R' || tag == 'S')) {
+            int value = readInt(); // Accept frames written by the earlier generated provider.
+            if (value < Character.MIN_VALUE || value > Character.MAX_VALUE) {
+                throw new DubboCodecException("Integer outside declared char range");
+            }
+            return (char) value;
+        }
+        int value = -1;
+        while (true) {
+            tag = unsigned(get());
+            int length;
+            boolean last;
+            if (tag <= 0x1f) {
+                length = tag;
+                last = true;
+            } else if (tag >= 0x30 && tag <= 0x33) {
+                length = ((tag - 0x30) << 8) + unsigned(get());
+                last = true;
+            } else if (tag == 'R' || tag == 'S') {
+                require(2);
+                length = Short.toUnsignedInt(buffer.getShort());
+                last = tag == 'S';
+            } else {
+                throw unexpected("char string", (byte) tag);
+            }
+            if (length > 1 || length == 1 && value >= 0) {
+                throw new DubboCodecException("Hessian char requires exactly one UTF-16 unit");
+            }
+            if (length == 1) {
+                int first = unsigned(get());
+                if (first < 0x80) {
+                    value = first;
+                } else if (first >= 0xc2 && first <= 0xdf) {
+                    value = ((first & 0x1f) << 6) | readCharContinuation();
+                } else if (first >= 0xe0 && first <= 0xef) {
+                    value = ((first & 0x0f) << 12) | (readCharContinuation() << 6)
+                            | readCharContinuation();
+                    if (value < 0x800) throw new DubboCodecException("Overlong Hessian char encoding");
+                } else {
+                    throw new DubboCodecException("Invalid Hessian char encoding");
+                }
+            }
+            if (last) {
+                if (value < 0) throw new DubboCodecException("Hessian char string must not be empty");
+                return (char) value;
+            }
+        }
+    }
+
+    private int readCharContinuation() {
+        int next = unsigned(get());
+        if ((next & 0xc0) != 0x80) throw new DubboCodecException("Invalid Hessian char continuation");
+        return next & 0x3f;
+    }
+
+    public boolean hasMoreBoundedMapEntries(int decodedEntries) {
+        if (decodedEntries < 0) throw new DubboCodecException("Invalid Hessian map entry count");
+        boolean more = hasMoreMapEntries();
+        if (more && decodedEntries >= maxCollectionItems) {
+            throw new DubboCodecException("Hessian map entry count exceeds configured limit");
+        }
+        return more;
     }
 }

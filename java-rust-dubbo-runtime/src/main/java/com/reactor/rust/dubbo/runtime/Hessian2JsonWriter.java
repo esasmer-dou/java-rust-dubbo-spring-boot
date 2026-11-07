@@ -6,4 +6,9 @@ import java.io.IOException;
 @FunctionalInterface
 public interface Hessian2JsonWriter {
     void write(Hessian2Input input, Hessian2JsonTranscoder output) throws IOException;
+
+    /** Replay has already resolved a non-null value; legacy writers keep their normal entry point. */
+    default void writeResolved(Hessian2Input input, Hessian2JsonTranscoder output) throws IOException {
+        write(input, output);
+    }
 }

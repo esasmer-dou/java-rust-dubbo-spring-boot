@@ -3,11 +3,9 @@ package com.reactor.rust.dubbo.runtime;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.AbstractList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Adds mutually exclusive direct JSON consumption to the existing native-backed List. */
@@ -29,24 +27,15 @@ public final class DirectJsonResults {
             Hessian2JsonWriter writer, Runnable releaseAction, boolean attachments, DirectJsonWriterPool pool) {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(releaseAction, "releaseAction");
-        AtomicBoolean released = new AtomicBoolean();
-        Runnable once = () -> { if (released.compareAndSet(false, true)) releaseAction.run(); };
+        NativeStreamingResultList.LeakGuard lease = new NativeStreamingResultList.LeakGuard(releaseAction);
         boolean transferred = false;
         Throwable failure = null;
         try {
             Objects.requireNonNull(writer, "writer");
             Objects.requireNonNull(decoder, "decoder");
-            Hessian2JsonInput.Root root;
-            Hessian2JsonTranscoder context = acquire(pool, input, OutputStream.nullOutputStream());
-            Throwable rootFailure = null;
-            try { root = context.input(input).readRoot(); }
-            catch (RuntimeException | Error error) { rootFailure = error; throw error; }
-            finally {
-                try { context.detach(); }
-                catch (RuntimeException | Error cleanupFailure) { cleanup(rootFailure, cleanupFailure); }
-            }
+            Hessian2JsonInput.Root root = (pool == null ? DirectJsonWriterPool.global() : pool).readRoot(input);
             input.jsonListRoot(root.typeName());
-            Result<E> result = new Result<>(input, root, decoder, writer, once, attachments, pool);
+            Result<E> result = new Result<>(input, root, decoder, writer, lease, attachments, pool);
             transferred = true;
             return result;
         } catch (RuntimeException | Error error) {
@@ -59,7 +48,7 @@ public final class DirectJsonResults {
                     if (failure == null) { failure = cleanupFailure; throw cleanupFailure; }
                     cleanup(failure, cleanupFailure);
                 } finally {
-                    try { once.run(); }
+                    try { lease.release(false); }
                     catch (RuntimeException | Error cleanupFailure) {
                         if (failure != null) {
                             if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
@@ -82,12 +71,11 @@ public final class DirectJsonResults {
         else if (cleanupFailure instanceof Error error) throw error;
     }
 
-    private static final class Result<E> extends AbstractList<E>
-            implements DubboStreamingResult<E>, DubboDirectJsonStream {
+    private static final class Result<E> extends NativeStreamingResultList<E>
+            implements DubboDirectJsonStream {
         private static final int READY = 0, DTO = 1, DIRECT = 2, CLOSED = 3, BUFFER_RETRY = 4;
         private final Hessian2Input input;
         private final Hessian2JsonWriter writer;
-        private final NativeStreamingResultList<E> delegate;
         private final Hessian2JsonInput.Root root;
         private final DirectJsonWriterPool pool;
         private final boolean attachments;
@@ -96,20 +84,20 @@ public final class DirectJsonResults {
         private int requiredLength;
 
         private Result(Hessian2Input input, Hessian2JsonInput.Root root, NativeResponseDecoder<E> decoder,
-                Hessian2JsonWriter writer, Runnable release, boolean attachments, DirectJsonWriterPool pool) {
+                Hessian2JsonWriter writer, NativeStreamingResultList.LeakGuard release,
+                boolean attachments, DirectJsonWriterPool pool) {
+            // This result is the sole lease/Cleaner owner in BOTH consumption modes.
+            super(input, root.size(), decoder, release);
             this.input = input;
             this.root = root;
             this.pool = pool;
             this.writer = writer;
             this.attachments = attachments;
-            // The delegate is the sole lease/Cleaner owner in BOTH consumption modes.
-            delegate = new NativeStreamingResultList<>(input, root.size(), decoder, release);
-            input.completeReference(input.referenceCount() - 1, this);
         }
 
-        @Override public int size() { selectDtoMode(); return delegate.size(); }
-        @Override public E get(int index) { selectDtoMode(); return delegate.get(index); }
-        @Override public Iterator<E> streamingIterator() { selectDtoMode(); return delegate.streamingIterator(); }
+        @Override public int size() { selectDtoMode(); return super.size(); }
+        @Override public E get(int index) { selectDtoMode(); return super.get(index); }
+        @Override public Iterator<E> streamingIterator() { selectDtoMode(); return super.streamingIterator(); }
 
         private void selectDtoMode() {
             if (state.compareAndSet(READY, DTO) || state.get() == DTO) return;
@@ -163,9 +151,8 @@ public final class DirectJsonResults {
                 if (length > capacity) {
                     requiredLength = length;
                     retain = true;
-                    return -length;
                 }
-                return length;
+                return retain ? -length : length;
             } catch (IOException error) {
                 IllegalStateException wrapped = new IllegalStateException("Direct JSON buffer writing failed", error);
                 failure = wrapped;
@@ -202,16 +189,16 @@ public final class DirectJsonResults {
                 if (out != null) out.detach();
             } catch (RuntimeException | Error error) {
                 detachFailure = error;
-            } finally {
-                if (bufferOutput != null) bufferOutput.detach();
-                if (retain && failure == null && detachFailure == null) state.set(BUFFER_RETRY);
-                else {
-                    state.set(CLOSED);
-                    try { delegate.close(); }
-                    catch (RuntimeException | Error error) {
-                        if (detachFailure == null) detachFailure = error;
-                        else cleanup(detachFailure, error);
-                    }
+            }
+            // Keep one cleanup tail: finally duplicates this graph in the hot caller's JIT input.
+            if (bufferOutput != null) bufferOutput.detach();
+            if (retain && failure == null && detachFailure == null) state.set(BUFFER_RETRY);
+            else {
+                state.set(CLOSED);
+                try { super.close(); }
+                catch (RuntimeException | Error error) {
+                    if (detachFailure == null) detachFailure = error;
+                    else cleanup(detachFailure, error);
                 }
             }
             if (detachFailure != null) cleanup(failure, detachFailure);
@@ -223,8 +210,8 @@ public final class DirectJsonResults {
                 int current = state.get();
                 if (current == DIRECT) throw new IllegalStateException("Cannot close direct JSON result while writeTo is active");
                 if (current == CLOSED) return;
-                if (current == DTO) { delegate.close(); return; }
-                if (state.compareAndSet(current, CLOSED)) { delegate.close(); return; }
+                if (current == DTO) { super.close(); return; }
+                if (state.compareAndSet(current, CLOSED)) { super.close(); return; }
             }
         }
     }

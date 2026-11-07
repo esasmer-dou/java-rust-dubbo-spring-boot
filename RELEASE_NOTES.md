@@ -1,3 +1,38 @@
+# 0.8.2 Distribution Candidate
+
+Prepared November 7, 2026. Not published; current-source correctness remains pending.
+
+Align all ten supported production modules, processor, enhancer and native JARs
+to `0.8.2`, then regenerate clients. Generated codecs support standard Hessian
+character strings and typed direct JSON fields. Direct JSON remains one-pass;
+close unused results. Buffer retries reuse the response without replaying the RPC.
+
+`-Areactor.dubbo.nativeArguments=true` is an opt-in annotation-processor option,
+not a runtime property. Its default is `false`: unset builds retain generated Java
+Hessian request encoding. Matching natives are required when enabled; missing
+exports fail explicitly. Existing JNI signatures and native ABI `3` are unchanged.
+Java business logic and request guards remain mandatory; no caching or bypass.
+
+P05 acceptance covers only measured Dubbo workloads. Full HTTP remains **13/15,
+not PASS**. **R-P05-HTTP-001** remains an open small HTTP control-route RPS/p99 risk
+without an established product root cause. No whole-plan, all-default, all-endpoint
+or all-platform performance acceptance is claimed. Native-argument default-off
+does not itself prove equivalence to the measured configuration.
+
+Windows x64, Linux x64 and macOS ARM64 natives were rebuilt from clean source
+`984c1925f6b6efe17c5324f7802ddf3b95128a45`, build `42348372720`, in compile-only
+mode. Linux retains the GLIBC 2.17 ceiling. No native rebuild is needed for this
+distribution snapshot. Build success is not runtime qualification: provenance
+remains runtime-unverified and release-not-ready until the matching EmaTech gate
+and release-owner authorization. Rust sources and internal tests remain private.
+
+Native SBOM metadata is refreshed from the existing dependency inventory after
+verifying the locked dependency graph is unchanged except workspace versions.
+This is a metadata refresh, not a claim that SBOM generation or runtime tests ran
+in the compile-only workflow. Public publication is deferred.
+
+---
+
 # 0.8.1
 
 Release date: 2026-10-30.

@@ -1,5 +1,16 @@
 # Değişiklik Kaydı
 
+## 0.8.2 Adayı - 2026-11-07
+
+- Desteklenen üretim modülleri ve yeniden üretilmiş Windows x64, Linux x64 ve
+  macOS ARM64 native dosyaları 0.8.2 sürümüne hizalanır. JNI ABI 3 ve imzalar korunur.
+- Üretilmiş codec, direct JSON sahipliği ve standart karakter desteği güncellenir.
+  Native istek argümanları isteğe bağlıdır; varsayılan false kalır.
+- P05 kabulü yalnız ölçülen Dubbo iş yükleri içindir. Tam HTTP 13/15, PASS değildir.
+  R-P05-HTTP-001 açıktır; ürün kök nedeni kanıtlanmamıştır.
+- Native derleme tamamlandı. Güncel kaynak için EmaTech doğruluk kabulü ve yayın
+  onayı bekleniyor. Tüm varsayılanlar veya plan için performans iddiası yoktur.
+
 ## 0.8.1 - 2026-10-30
 
 - Interface üzerindeki `@DubboMethod(timeoutMs=...)` ve field üzerindeki

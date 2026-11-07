@@ -1,3 +1,38 @@
+# 0.8.2 Dağıtım Adayı
+
+Hazırlık: 7 Kasım 2026. Yayımlanmadı; güncel kaynak için doğruluk kabulü bekleniyor.
+
+Desteklenen on üretim modülünü, processor, enhancer ve native JAR'ları `0.8.2`
+sürümüne hizalayın; istemcileri yeniden üretin. Üretilmiş codec standart Hessian
+karakter metnini ve tipli direct JSON alanlarını destekler. Direct JSON tek
+geçişlidir; kullanılmayan sonucu kapatın. Buffer tekrar yazımı aynı yanıtı kullanır,
+RPC'yi tekrarlamaz.
+
+`-Areactor.dubbo.nativeArguments=true` isteğe bağlı annotation-processor seçeneğidir;
+runtime ayarı değildir. Varsayılan `false` kalır; seçenek verilmezse üretilmiş Java
+Hessian istek kodlaması korunur. Açıldığında eşleşen native zorunludur; eksik export
+açık hata verir. Mevcut JNI imzaları ve ABI `3` değişmez. Java iş mantığı ve istek
+guard'ları zorunludur; önbellek veya bypass eklenmez.
+
+P05 kabulü yalnız ölçülen Dubbo iş yüklerini kapsar. Tam HTTP **13/15; PASS
+değildir**. **R-P05-HTTP-001**, kanıtlanmış ürün kök nedeni olmadan açık kalan küçük
+HTTP kontrol rotası RPS/p99 riskidir. Tüm plan, varsayılanlar, endpoint'ler veya
+platformlar için performans kabulü iddia edilmez. Native argümanların kapalı olması
+tek başına ölçülen yapılandırmayla eşdeğerlik kanıtlamaz.
+
+Windows x64, Linux x64 ve macOS ARM64 native dosyaları temiz kaynak
+`984c1925f6b6efe17c5324f7802ddf3b95128a45` üzerinden, `42348372720` numaralı
+compile-only build ile yeniden üretildi. Linux GLIBC 2.17 sınırı korunur. Bu dağıtım
+snapshot'ı için native rebuild gerekmez. Build başarısı runtime kabulü değildir.
+Eşleşen EmaTech kabulü ve sürüm sahibi onayı gelene kadar provenance runtime
+doğrulanmamış ve yayına hazır değil olarak kalır. Rust ve iç testler private kalır.
+
+Native SBOM metadata'sı, kilitli bağımlılık grafiğinde yalnız workspace sürümlerinin
+değiştiği doğrulandıktan sonra mevcut envanterden güncellenir. Compile-only workflow'da
+SBOM üretildiği veya runtime testi çalıştığı iddia edilmez. Public yayın ertelenmiştir.
+
+---
+
 # 0.8.1
 
 Yayın tarihi: 2026-10-30.

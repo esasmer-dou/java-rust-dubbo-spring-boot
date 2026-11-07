@@ -32,6 +32,35 @@ public final class NativeDubboBridge {
         nativeRegisterMethod(clientId, methodId, method, descriptor);
     }
 
+    public static void registerScalarMethod(int clientId, int methodId, String method, String descriptor) {
+        ensureLoaded();
+        try {
+            nativeRegisterScalarMethod(clientId, methodId, method, descriptor);
+        } catch (UnsatisfiedLinkError missing) {
+            throw new DubboNativeException("Generated native scalar arguments require a native binary "
+                    + "with nativeRegisterScalarMethod; no Java codec fallback was attempted", missing);
+        }
+    }
+
+    public static void registerIntMethod(int clientId, int methodId, String method, String descriptor) {
+        ensureLoaded();
+        try {
+            nativeRegisterIntMethod(clientId, methodId, method, descriptor);
+        } catch (UnsatisfiedLinkError missing) {
+            throw new DubboNativeException("Generated native int arguments require a native binary "
+                    + "with nativeRegisterIntMethod; no Java codec fallback was attempted", missing);
+        }
+    }
+
+    public static NativeResponse invokeInt(int clientId, int methodId, int value, int timeoutMs) {
+        ensureLoaded();
+        long handle = nativeInvokeInt(clientId, methodId, value, timeoutMs);
+        if (handle <= 0) {
+            throw new DubboNativeException("Native Dubbo invocation failed without a response handle");
+        }
+        return takeResponse(handle);
+    }
+
     public static NativeResponse invoke(int clientId, int methodId, ByteBuffer request,
                                         int requestLength, int timeoutMs) {
         ensureLoaded();
@@ -193,6 +222,11 @@ public final class NativeDubboBridge {
     private static native void nativeInvokeAsync(int clientId, int methodId, ByteBuffer request,
                                                  int requestLength, int timeoutMs,
                                                  NativeDubboAsyncCallback callback);
+    private static native void nativeRegisterScalarMethod(int clientId, int methodId,
+                                                           String method, String descriptor);
+    private static native void nativeRegisterIntMethod(int clientId, int methodId,
+                                                        String method, String descriptor);
+    private static native long nativeInvokeInt(int clientId, int methodId, int value, int timeoutMs);
     private static native int nativeResponseStatus(long responseHandle);
     private static native ByteBuffer nativeResponseBuffer(long responseHandle);
     private static native void nativeReleaseResponse(long responseHandle);
