@@ -1,6 +1,7 @@
-# 0.8.2 Dağıtım Adayı
+# 0.8.2
 
-Hazırlık: 7 Kasım 2026. Yayımlanmadı; güncel kaynak için doğruluk kabulü bekleniyor.
+Kararlı sürüm tarihi: 7 Kasım 2026. Linux x64 doğruluk kabulü EmaTech üzerinde geçti;
+Windows x64 ve macOS ARM64 runtime davranışları bu sürüm için doğrulanmadı.
 
 Desteklenen on üretim modülünü, processor, enhancer ve native JAR'ları `0.8.2`
 sürümüne hizalayın; istemcileri yeniden üretin. Üretilmiş codec standart Hessian
@@ -23,13 +24,24 @@ tek başına ölçülen yapılandırmayla eşdeğerlik kanıtlamaz.
 Windows x64, Linux x64 ve macOS ARM64 native dosyaları temiz kaynak
 `984c1925f6b6efe17c5324f7802ddf3b95128a45` üzerinden, `42348372720` numaralı
 compile-only build ile yeniden üretildi. Linux GLIBC 2.17 sınırı korunur. Bu dağıtım
-snapshot'ı için native rebuild gerekmez. Build başarısı runtime kabulü değildir.
-Eşleşen EmaTech kabulü ve sürüm sahibi onayı gelene kadar provenance runtime
-doğrulanmamış ve yayına hazır değil olarak kalır. Rust ve iç testler private kalır.
+sürümü için native rebuild gerekmez. Linux x64 EmaTech doğruluk kontrolü 7 Kasım
+2026, 07:15 UTC'de tamamlandı. Native SHA-256:
+`04e285ea10c3dcd96729b379605df19bc73d67cd8955f70515011178b620fb9f`.
+Surefire raporlarında runtime 217, codegen 74, starter 8 ve integration 20 test var:
+toplam 319 test, 311 başarılı, 8 allocation kontrolü atlandı; hata/başarısızlık yok.
+Bu doğruluk kabulü yeni bir performans kabulü değildir.
+
+Kök provenance içinde `release.ready=true`, `release.ready.scope=linux-x64` ve
+`runtime.verified.scope=linux-x64` bulunur. Genel `runtime.verified=false`, tüm
+platformların runtime kabulü olmadığı anlamındadır; `linux-x64.runtime.verified=true`
+doğrulanan platformu belirtir. Windows/macOS runtime bayrakları false kalır ve bu
+platformların provenance dosyaları yayına hazır kabul edilmez. Derleme başarısı
+runtime kabulü değildir. Bu alanlar kanıtı belgeler; loader bunları okumaz veya
+platform kabulü için zorunlu kontrol uygulamaz. Rust ve iç testler private kalır.
 
 Native SBOM metadata'sı, kilitli bağımlılık grafiğinde yalnız workspace sürümlerinin
 değiştiği doğrulandıktan sonra mevcut envanterden güncellenir. Compile-only workflow'da
-SBOM üretildiği veya runtime testi çalıştığı iddia edilmez. Public yayın ertelenmiştir.
+SBOM üretildiği veya runtime testi çalıştığı iddia edilmez. Public push ve yayın yapılmadı.
 
 ---
 

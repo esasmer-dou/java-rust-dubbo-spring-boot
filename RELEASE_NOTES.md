@@ -1,6 +1,7 @@
-# 0.8.2 Distribution Candidate
+# 0.8.2
 
-Prepared November 7, 2026. Not published; current-source correctness remains pending.
+Stable release date: November 7, 2026. Linux x64 correctness passed on EmaTech;
+Windows x64 and macOS ARM64 runtime behavior was not verified for this release.
 
 Align all ten supported production modules, processor, enhancer and native JARs
 to `0.8.2`, then regenerate clients. Generated codecs support standard Hessian
@@ -22,14 +23,26 @@ does not itself prove equivalence to the measured configuration.
 Windows x64, Linux x64 and macOS ARM64 natives were rebuilt from clean source
 `984c1925f6b6efe17c5324f7802ddf3b95128a45`, build `42348372720`, in compile-only
 mode. Linux retains the GLIBC 2.17 ceiling. No native rebuild is needed for this
-distribution snapshot. Build success is not runtime qualification: provenance
-remains runtime-unverified and release-not-ready until the matching EmaTech gate
-and release-owner authorization. Rust sources and internal tests remain private.
+release. The Linux x64 EmaTech correctness gate completed November 7, 2026 at
+07:15 UTC with native SHA-256
+`04e285ea10c3dcd96729b379605df19bc73d67cd8955f70515011178b620fb9f`.
+Surefire reports contain runtime 217, codegen 74, starter 8 and integration 20:
+319 tests total, 311 successful, 8 allocation checks skipped, zero failures/errors.
+This correctness gate is not a new performance acceptance result.
+
+Root provenance sets `release.ready=true` with `release.ready.scope=linux-x64`
+and `runtime.verified.scope=linux-x64`. Global `runtime.verified=false` means that
+not all supported platforms are runtime-verified; `linux-x64.runtime.verified=true`
+records the verified platform. Windows/macOS runtime flags remain false and their
+platform provenance remains release-not-ready. Native compilation alone does not
+qualify their runtime behavior. These flags document evidence; the loader does
+not read them or enforce a platform qualification gate. Rust sources and internal
+tests remain private.
 
 Native SBOM metadata is refreshed from the existing dependency inventory after
 verifying the locked dependency graph is unchanged except workspace versions.
 This is a metadata refresh, not a claim that SBOM generation or runtime tests ran
-in the compile-only workflow. Public publication is deferred.
+in the compile-only workflow. Public push and publication have not been performed.
 
 ---
 

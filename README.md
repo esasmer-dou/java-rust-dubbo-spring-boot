@@ -6,11 +6,12 @@ A reflection-free Dubbo consumer and provider for Spring Boot 3. Java keeps the 
 
 The public package contains the supported Java API and Windows, Linux, and Apple Silicon macOS native artifacts. Rust source is maintained in a separate private repository.
 
-## 0.8.2 Distribution Candidate
+## 0.8.2 Release
 
-Prepared November 7, 2026; not published. The latest verified stable release remains
-`0.8.1`. Current-source correctness with the fresh native artifacts is pending on
-EmaTech. Native build success alone is not runtime qualification.
+Stable release: November 7, 2026. Linux x64 correctness passed on EmaTech with the
+fresh native artifact: 319 tests reported, 311 successful, 8 allocation checks
+skipped, no failures or errors. Windows x64 and macOS ARM64 are compile-only;
+their runtime behavior was not verified for this release. Publication is a separate step.
 
 Align the processor, enhancer, runtime, adapter and native JARs to `0.8.2`, then
 regenerate clients. The codec now supports standard Hessian `char`/`Character`
@@ -40,7 +41,7 @@ RPS/p99 regressions have no established product root cause. This is not whole-pl
 all-default, all-endpoint or all-platform performance qualification. Disabling
 native arguments alone does not establish equivalence to the measured configuration.
 
-[Candidate release notes](RELEASE_NOTES.md)
+[Release notes](RELEASE_NOTES.md)
 
 ## Contents
 
@@ -138,7 +139,7 @@ Old generated clients keep their existing runtime entry points.
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Distribution candidate: `0.8.2` (2026-11-07), pending correctness qualification and publication.
+Stable release: `0.8.2` (2026-11-07), with Linux x64 correctness verification only.
 
 ### 0.8.0: Forward Typed Results Without Consumer Row DTOs
 
@@ -192,7 +193,7 @@ by a network timeout. Keep JDBC deadlines and idempotency explicit. Native respo
 admission permit remain owned until the Java operation actually completes. Writes are never replayed.
 Set a compatible timeout on the consumer as well.
 
-Use the matching `0.8.2` DLL/SO/dylib for this candidate. Native ABI stays `3`; new entry points
+Use the matching `0.8.2` DLL/SO/dylib for this release. Native ABI stays `3`; new entry points
 are additive. For optional provider telemetry, use the published
 [Glowroot `0.7.1` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.1):
 `java-rust-glowroot-spring-native-dubbo-adapter:0.7.1`. Keep all agent modules on 0.7.1.

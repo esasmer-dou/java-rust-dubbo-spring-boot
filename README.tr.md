@@ -6,11 +6,12 @@ Spring Boot 3 için reflection kullanmayan bir Dubbo consumer ve provider kütü
 
 Public paket, desteklenen Java API'sini ve Windows, Linux ve Apple Silicon macOS native artifact'larını içerir. Rust kaynak kodu ayrı bir private repoda tutulur.
 
-## 0.8.2 Dağıtım Adayı
+## 0.8.2 Sürümü
 
-Hazırlık: 7 Kasım 2026; henüz yayımlanmadı. Son doğrulanmış stable sürüm `0.8.1`
-olarak kalır. Güncel kaynağın yeni native dosyalarla doğruluk kontrolü EmaTech
-üzerinde bekleniyor. Native build başarısı tek başına runtime kabulü değildir.
+Kararlı sürüm: 7 Kasım 2026. Yeni native dosyasıyla Linux x64 doğruluk kontrolü
+EmaTech üzerinde geçti: toplam 319 test, 311 başarılı, 8 allocation kontrolü
+atlandı; hata veya başarısızlık yok. Windows x64 ve macOS ARM64 yalnız derlendi;
+bu sürüm için runtime davranışları doğrulanmadı. Yayın ayrı bir adımdır.
 
 Processor, enhancer, runtime, adaptör ve native JAR'ları `0.8.2` sürümüne hizalayın;
 istemcileri yeniden üretin. Codec artık `char`/`Character` için standart Hessian
@@ -41,7 +42,7 @@ gerilemesi vardır; ürün kök nedeni kanıtlanmamıştır. Tüm plan, varsayı
 endpoint'ler veya platformlar için performans kabulü değildir. Native argümanları
 kapatmak tek başına ölçülen yapılandırmayla eşdeğerlik kanıtlamaz.
 
-[Aday sürüm notları](RELEASE_NOTES.tr.md)
+[Sürüm notları](RELEASE_NOTES.tr.md)
 
 ## İçindekiler
 
@@ -140,7 +141,7 @@ Eski üretilmiş istemcilerin runtime girişleri korunur.
 - Windows x64, GLIBC 2.17 ve üzeri Linux x64 veya macOS 11 ve üzeri Apple Silicon Mac
 - Consumer ve provider tarafından ortak kullanılan küçük bir Java contract JAR'ı
 
-Dağıtım adayı: `0.8.2` (2026-11-07); doğruluk kabulü ve yayın bekleniyor.
+Kararlı sürüm: `0.8.2` (2026-11-07); doğruluk kabulü yalnız Linux x64 içindir.
 
 ### 0.8.0: Tipli Sonucu DTO Oluşturmadan Aktarın
 
@@ -193,7 +194,7 @@ Kuyrukta süresi dolan iş başlatılmaz. Başlamış DB işlemi ağ timeout'u i
 JDBC timeout'unu ve idempotency kuralını ayrıca belirleyin. Java tamamlanana kadar native cevap belleği
 ve concurrency izni korunur. Yazma işlemi kendiliğinden tekrarlanmaz. Consumer timeout'unu da ayarlayın.
 
-Bu aday için eşleşen `0.8.2` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
+Bu sürüm için eşleşen `0.8.2` DLL/SO/dylib dosyasını kullanın. Native ABI `3` korunur.
 Yeni girişler mevcut API'ye eklenir. İsteğe bağlı provider ölçümü için yayımlanmış
 [Glowroot `0.7.1` adaptörünü](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.1) kullanın:
 `java-rust-glowroot-spring-native-dubbo-adapter:0.7.1`. Tüm agent modüllerini aynı sürümde tutun.
