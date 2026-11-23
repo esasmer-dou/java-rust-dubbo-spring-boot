@@ -1,5 +1,10 @@
 # Değişiklik Kaydı
 
+## 0.8.3
+
+- Paylaşılan kullanıcı dizinindeki eşzamanlı JNI kurulum yarışını düzelt.
+  0.8.2 native dosyalarını ve Spring Dubbo ABI 3 sözleşmesini koru.
+
 ## 0.8.2 - 2026-11-07
 
 - Desteklenen üretim modülleri ve yeniden üretilmiş Windows x64, Linux x64 ve

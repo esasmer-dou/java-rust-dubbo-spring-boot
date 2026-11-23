@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo-spring-boot-parent</artifactId>
-  <version>0.8.2</version>
+    <version>0.8.3</version>
   <packaging>pom</packaging>
 
   <name>Java Rust Dubbo Spring Boot</name>

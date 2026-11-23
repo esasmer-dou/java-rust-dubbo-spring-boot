@@ -1,4 +1,14 @@
-# 0.8.2
+# 0.8.3
+
+Birden çok JVM aynı kullanıcı diziniyle açıldığında oluşabilen JNI kurulum
+hatası düzeltildi. Her kurulum ayrı bir geçici dosya kullanır. Diğer JVM dosyayı
+önce yerleştirdiyse kurulum, yalnızca içerik eşleştiğinde başarılı sayılır.
+
+Maven bağımlılıklarını `0.8.3` sürümüne hizalayın. Native dosyalar `0.8.2` ile
+aynıdır. Spring Dubbo JNI ABI `3` korunur. Bu düzeltmenin çalışma zamanı kontrolü
+EmaTech Linux x64 ile sınırlıdır; yeni performans iddiası yoktur.
+
+## 0.8.2
 
 Kararlı sürüm tarihi: 7 Kasım 2026. Linux x64 doğruluk kabulü EmaTech üzerinde geçti;
 Windows x64 ve macOS ARM64 runtime davranışları bu sürüm için doğrulanmadı.

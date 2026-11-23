@@ -34,15 +34,36 @@ final class NativeLibraryLoader {
             String hash = sha256(binary).substring(0, 16);
             String fileName = resource.substring(resource.lastIndexOf('/') + 1);
             Path target = Path.of(System.getProperty("user.home"), ".java-rust-dubbo", "native", hash, fileName);
-            Files.createDirectories(target.getParent());
-            if (!Files.exists(target) || Files.size(target) != binary.length) {
-                Path staging = target.resolveSibling(fileName + ".staging");
-                Files.write(staging, binary);
-                Files.move(staging, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            }
+            install(target, binary);
             System.load(target.toAbsolutePath().toString());
         } catch (IOException exception) {
             throw new DubboNativeException("Failed to install the native Dubbo library", exception);
+        }
+    }
+
+    static void install(Path target, byte[] binary) throws IOException {
+        Files.createDirectories(target.getParent());
+        if (Files.exists(target) && Files.size(target) == binary.length) {
+            return;
+        }
+        Path staging = Files.createTempFile(target.getParent(), target.getFileName().toString(), ".staging");
+        try {
+            Files.write(staging, binary);
+            try {
+                Files.move(staging, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException moveFailure) {
+                // Another JVM may already have published and mapped the same DLL.
+                try {
+                    if (Files.isRegularFile(target) && Files.mismatch(staging, target) == -1) {
+                        return;
+                    }
+                } catch (IOException verificationFailure) {
+                    moveFailure.addSuppressed(verificationFailure);
+                }
+                throw moveFailure;
+            }
+        } finally {
+            Files.deleteIfExists(staging);
         }
     }
 

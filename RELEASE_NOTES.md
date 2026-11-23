@@ -1,4 +1,14 @@
-# 0.8.2
+# 0.8.3
+
+Fixes concurrent extraction of the packaged JNI library when multiple JVMs
+start with the same user home. Each installer writes its own temporary file;
+an atomic publication race is tolerated only if the installed bytes match.
+
+Align Maven dependencies to `0.8.3`. Native binaries are unchanged from
+`0.8.2`; Spring Dubbo JNI ABI remains `3`. The runtime gate for this fix is
+scoped to EmaTech Linux x64. No new benchmark or other platform claim is made.
+
+## 0.8.2
 
 Stable release date: November 7, 2026. Linux x64 correctness passed on EmaTech;
 Windows x64 and macOS ARM64 runtime behavior was not verified for this release.

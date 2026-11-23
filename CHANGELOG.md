@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.3
+
+- Fix concurrent packaged JNI installation in a shared home. Reuse the
+  0.8.2 native binaries and keep Spring Dubbo ABI 3.
+
 ## 0.8.2 - 2026-11-07
 
 - Align supported production modules and freshly rebuilt Windows x64, Linux x64

@@ -6,6 +6,13 @@ A reflection-free Dubbo consumer and provider for Spring Boot 3. Java keeps the 
 
 The public package contains the supported Java API and Windows, Linux, and Apple Silicon macOS native artifacts. Rust source is maintained in a separate private repository.
 
+## 0.8.3 Release
+
+Upgrade all Java, processor, adapter, and native JAR dependencies to `0.8.3`.
+Two JVMs can now install the packaged JNI library in a shared home directory
+without overwriting each other's staging file. JNI ABI stays at `3`; the native
+binaries are byte-for-byte unchanged from `0.8.2`. No runtime setting is needed.
+
 ## 0.8.2 Release
 
 Stable release: November 7, 2026. Linux x64 correctness passed on EmaTech with the
@@ -147,13 +154,13 @@ Old generated clients keep their existing runtime entry points.
 - Windows x64, Linux x64 with GLIBC 2.17 or newer, or Apple Silicon macOS 11 or newer
 - A shared Java contract artifact used by both consumer and provider
 
-Stable release: `0.8.2` (2026-11-07), with Linux x64 correctness verification only.
+Stable release: `0.8.3`, with Linux x64 correctness verification only.
 
 ### 0.8.0: Forward Typed Results Without Consumer Row DTOs
 
 Use `@DubboStreamed(directJson = true)` when the consumer only forwards a result to HTTP. Generated codecs write typed native values as JSON fields without constructing consumer row DTOs. Use ordinary typed decoding when Java must validate or transform rows.
 
-For Rust-Java REST, add the optional `java-rust-dubbo-rest-adapter:0.8.2`. `DubboJsonResponses.body(result)` uses the existing bounded response protocol. Return that body from the handler to transfer ownership to HTTP. Close it if it will not be submitted. Do not pass an ordinary list: there is no hidden DTO fallback.
+For Rust-Java REST, add the optional `java-rust-dubbo-rest-adapter:0.8.3`. `DubboJsonResponses.body(result)` uses the existing bounded response protocol. Return that body from the handler to transfer ownership to HTTP. Close it if it will not be submitted. Do not pass an ordinary list: there is no hidden DTO fallback.
 
 Consumption is one-pass. A second attempt fails explicitly. Native ownership ends on completion or cancellation. Use REST 4.8.0 and matching native binaries. Spring applications do not need this REST adapter.
 
@@ -201,7 +208,7 @@ by a network timeout. Keep JDBC deadlines and idempotency explicit. Native respo
 admission permit remain owned until the Java operation actually completes. Writes are never replayed.
 Set a compatible timeout on the consumer as well.
 
-Use the matching `0.8.2` DLL/SO/dylib for this release. Native ABI stays `3`; new entry points
+Use the matching `0.8.3` DLL/SO/dylib for this release. Native ABI stays `3`; new entry points
 are additive. For optional provider telemetry, use the published
 [Glowroot `0.7.1` adapter](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.1):
 `java-rust-glowroot-spring-native-dubbo-adapter:0.7.1`. Keep all agent modules on 0.7.1.
@@ -286,7 +293,7 @@ Add the repository, starter, code generator, one native platform artifact, and b
 
 ```xml
 <properties>
-  <java-rust-dubbo.version>0.8.2</java-rust-dubbo.version>
+  <java-rust-dubbo.version>0.8.3</java-rust-dubbo.version>
 </properties>
 
 <repositories>
