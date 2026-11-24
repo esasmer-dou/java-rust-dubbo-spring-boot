@@ -4,8 +4,6 @@
 
 Spring Boot 3 için reflection kullanmayan bir Dubbo consumer ve provider kütüphanesidir. İş mantığı Java'da kalır. Küçük bir Rust native veri düzlemi; TCP bağlantılarını, Dubbo paketlerini, zaman aşımlarını, heartbeat işlemlerini, backpressure kontrolünü ve provider iletişimini yönetir.
 
-Public paket, desteklenen Java API'sini ve Windows, Linux ve Apple Silicon macOS native artifact'larını içerir. Rust kaynak kodu ayrı bir private repoda tutulur.
-
 ## 0.8.3 Sürümü
 
 Java, işlemci, adaptör ve native JAR bağımlılıklarını birlikte `0.8.3` sürümüne
@@ -15,20 +13,7 @@ dosyalar `0.8.2` ile birebir aynıdır. Ek ayar gerekmez.
 
 ## 0.8.2 Sürümü
 
-Kararlı sürüm: 7 Kasım 2026. Yeni native dosyasıyla Linux x64 doğruluk kontrolü
-EmaTech üzerinde geçti: toplam 319 test, 311 başarılı, 8 allocation kontrolü
-atlandı; hata veya başarısızlık yok. Windows x64 ve macOS ARM64 yalnız derlendi;
-bu sürüm için runtime davranışları doğrulanmadı.
-
-Public `0.8.2` yayını 7 Kasım 2026'da tamamlandı.
-[Doğrulanmış dağıtım yayın çalışması `42352258715`](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/actions/runs/42352258715),
-`refs/heads/master` üzerindeki `d9b9a1ff696432cccb2cb3ae0dcc9222c45f512a`
-commit'iyle başarılı oldu; `refs/tags/v0.8.2` aynı kaynağı gösterir. Toplam 31 Maven
-POM/JAR dosyası yeniden, kimlik doğrulamalı indirilip SHA-256 ile doğrulandı;
-[publication-verification.json](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/releases/download/v0.8.2/publication-verification.json)
-kaydına bakın. Paketlerin yayımlanması runtime veya performans kabul kapsamını genişletmez.
-
-Processor, enhancer, runtime, adaptör ve native JAR'ları `0.8.2` sürümüne hizalayın;
+Processor, enhancer, runtime, adaptör ve native JAR'ları aynı sürüme hizalayın;
 istemcileri yeniden üretin. Codec artık `char`/`Character` için standart Hessian
 metin biçimini ve tipli direct JSON alanlarını destekler. Okuyucu eski üretilmiş
 `0..65535` tamsayı karakterlerini de kabul eder. Yeni yazıcıdan önce eski, yalnız

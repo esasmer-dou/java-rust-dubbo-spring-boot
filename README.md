@@ -15,20 +15,7 @@ binaries are byte-for-byte unchanged from `0.8.2`. No runtime setting is needed.
 
 ## 0.8.2 Release
 
-Stable release: November 7, 2026. Linux x64 correctness passed on EmaTech with the
-fresh native artifact: 319 tests reported, 311 successful, 8 allocation checks
-skipped, no failures or errors. Windows x64 and macOS ARM64 are compile-only;
-their runtime behavior was not verified for this release.
-
-Public `0.8.2` publication completed on November 7, 2026. The
-[verified-distribution publication run `42352258715`](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/actions/runs/42352258715)
-succeeded from `refs/heads/master` at `d9b9a1ff696432cccb2cb3ae0dcc9222c45f512a`,
-the source ref for `refs/tags/v0.8.2`. All 31 Maven POM/JAR files passed fresh
-authenticated download and SHA-256 verification; see
-[publication-verification.json](https://github.com/esasmer-dou/java-rust-dubbo-spring-boot/releases/download/v0.8.2/publication-verification.json).
-Package availability does not extend the runtime or performance qualification scope.
-
-Align the processor, enhancer, runtime, adapter and native JARs to `0.8.2`, then
+Align the processor, enhancer, runtime, adapter and native JARs to the same version, then
 regenerate clients. The codec now supports standard Hessian `char`/`Character`
 strings, including typed direct JSON fields. Readers also accept earlier generated
 integer characters in `0..65535`; upgrade integer-only readers before new writers.
